@@ -451,6 +451,12 @@ body::before{
         <span id="statusText">CONNECTING</span>
       </div>
       <div class="session-id" id="sessionId">--</div>
+      <button class="theme-toggle" id="ttsToggle" onclick="toggleTTS()" title="Toggle voice">
+        <svg id="ttsIcon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+        </svg>
+      </button>
       <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle theme">
         <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
@@ -528,6 +534,23 @@ let mediaRecorder = null;
 let audioChunks = [];
 let inputMode = 'text';
 let currentAudio = null;
+
+// ── TTS Toggle ──
+let ttsEnabled = localStorage.getItem('jarvis-tts') !== 'off';
+function toggleTTS() {
+  ttsEnabled = !ttsEnabled;
+  localStorage.setItem('jarvis-tts', ttsEnabled ? 'on' : 'off');
+  if (!ttsEnabled) window.speechSynthesis.cancel();
+  updateTTSIcon();
+}
+function updateTTSIcon() {
+  const el = document.getElementById('ttsIcon');
+  el.style.opacity = ttsEnabled ? '1' : '0.3';
+}
+updateTTSIcon();
+// Preload voices (some browsers need this)
+window.speechSynthesis.getVoices();
+window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
 
 // ── Theme ──
 const SUN_SVG = '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
@@ -623,6 +646,7 @@ async function sendText() {
     const data = await r.json();
     hideTyping();
     addMessage(data.response, 'jarvis');
+    speakText(data.response);
   } catch (e) {
     hideTyping();
     addMessage('Connection error. Backend may be offline.', 'jarvis');
@@ -741,6 +765,7 @@ async function sendVoice(blob) {
     if (data.transcript) addMessage(data.transcript, 'user');
     addMessage(data.response, 'jarvis');
     if (data.audio_base64) playAudio(data.audio_base64);
+    else speakText(data.response);
     updateMicState('idle');
   } catch (e) {
     hideTyping();
@@ -779,6 +804,47 @@ function playAudio(b64) {
   currentAudio.onended = () => { overlay.classList.remove('active'); URL.revokeObjectURL(url); };
   currentAudio.onerror = () => overlay.classList.remove('active');
   currentAudio.play();
+}
+
+// ── Browser TTS (SpeechSynthesis) ──
+function speakText(text) {
+  if (!ttsEnabled || !('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+
+  // Strip markdown for cleaner speech
+  const clean = text
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/`(.+?)`/g, '$1')
+    .replace(/\[(.+?)\]\(.+?\)/g, '$1')
+    .replace(/^#{1,3}\s+/gm, '')
+    .replace(/^[-*+]\s+/gm, '')
+    .replace(/^\d+[.)]\s+/gm, '')
+    .replace(/\n+/g, '. ')
+    .trim();
+
+  const overlay = document.getElementById('speakingOverlay');
+  const utterance = new SpeechSynthesisUtterance(clean);
+
+  // Detect language
+  const spanishPattern = /[áéíóúñ¿¡]|hola|noticias|aquí|tienes|puedes/i;
+  utterance.lang = spanishPattern.test(clean) ? 'es-ES' : 'en-US';
+  utterance.rate = 1.05;
+  utterance.pitch = 1.0;
+
+  // Try to pick a good voice
+  const voices = window.speechSynthesis.getVoices();
+  const langPrefix = utterance.lang.slice(0, 2);
+  const preferred = voices.find(v => v.lang.startsWith(langPrefix) && v.name.toLowerCase().includes('male'))
+    || voices.find(v => v.lang.startsWith(langPrefix))
+    || voices[0];
+  if (preferred) utterance.voice = preferred;
+
+  utterance.onstart = () => overlay.classList.add('active');
+  utterance.onend = () => overlay.classList.remove('active');
+  utterance.onerror = () => overlay.classList.remove('active');
+
+  window.speechSynthesis.speak(utterance);
 }
 
 // ── Markdown Renderer (safe DOM-based, no innerHTML) ──
