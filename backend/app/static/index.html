@@ -1050,18 +1050,23 @@ async function hfSendAudio() {
     const r = await fetch(API + '/voice', { method: 'POST', body: form });
     const data = await r.json();
     hideTyping();
-    if (data.transcript) addMessage(data.transcript, 'user');
-    addMessage(data.response, 'jarvis');
 
-    // Play audio and wait for it to finish before resuming listening
-    if (data.audio_base64) {
-      await playAudioAsync(data.audio_base64);
+    // Skip empty transcripts silently (no speech detected)
+    if (!data.transcript && !data.response) {
+      // Just resume listening
     } else {
-      await speakTextAsync(data.response);
+      if (data.transcript) addMessage(data.transcript, 'user');
+      if (data.response) addMessage(data.response, 'jarvis');
+
+      if (data.audio_base64) {
+        await playAudioAsync(data.audio_base64);
+      } else if (data.response) {
+        await speakTextAsync(data.response);
+      }
     }
   } catch (e) {
     hideTyping();
-    addMessage('Voice processing failed. Check backend.', 'jarvis');
+    console.error('Voice error:', e);
   }
 
   // Resume listening

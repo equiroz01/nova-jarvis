@@ -37,6 +37,8 @@ async def voice(
     if not audio_bytes:
         raise HTTPException(status_code=400, detail="Empty audio file")
 
+    logger.info(f"Received audio: {len(audio_bytes)} bytes")
+
     # Speech-to-Text
     try:
         transcript = transcribe_audio(audio_bytes, language_code=language)
@@ -45,7 +47,15 @@ async def voice(
         raise HTTPException(status_code=500, detail=f"Speech recognition failed: {str(e)}")
 
     if not transcript:
-        raise HTTPException(status_code=400, detail="Could not transcribe audio")
+        # No speech detected — return friendly message instead of error
+        return VoiceResponse(
+            transcript="",
+            response="I didn't catch that. Could you try again?",
+            audio_base64="",
+            session_id=session_id,
+        )
+
+    logger.info(f"Transcript: {transcript}")
 
     # Agent processing
     executor = req.app.state.agent_executor
@@ -56,12 +66,12 @@ async def voice(
         raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}")
 
     # Text-to-Speech
+    audio_b64 = ""
     try:
-        audio_response = synthesize_speech(response_text, language_code=language)
+        audio_response = synthesize_speech(response_text)
         audio_b64 = base64.b64encode(audio_response).decode("utf-8")
     except Exception as e:
-        logger.error(f"TTS error: {e}", exc_info=True)
-        audio_b64 = ""
+        logger.warning(f"TTS failed (client will use browser TTS): {e}")
 
     return VoiceResponse(
         transcript=transcript,
