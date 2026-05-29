@@ -1,12 +1,16 @@
 from langchain.tools import tool
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 
 
 @tool
 def web_search(query: str) -> str:
-    """Search the web using DuckDuckGo for up-to-date information.
-    Use this when the user asks about current events, weather, news, or anything
-    that requires real-time internet data."""
+    """Search the internet for real-time information. You MUST use this tool whenever the user asks about:
+    - News, current events, or recent happenings
+    - Weather or forecasts
+    - Prices, stocks, or financial data
+    - Sports scores or results
+    - Any question that requires up-to-date information you don't have
+    Always call this tool first before saying you can't find information."""
     try:
         with DDGS() as ddgs:
             results = list(ddgs.text(query, region="wt-wt", safesearch="Moderate", max_results=3))

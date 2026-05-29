@@ -15,5 +15,5 @@ google-api-python-client>=2.150.0
 google-auth-oauthlib>=1.2.0
 
 # Tools
-duckduckgo-search>=8.0.0
+ddgs>=7.0.0
 pytz>=2025.0

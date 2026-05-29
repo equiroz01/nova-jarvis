@@ -30,4 +30,6 @@ async def chat(request: ChatRequest, req: Request):
         return ChatResponse(response=output, session_id=request.session_id)
     except Exception as e:
         logger.error(f"Agent error: {e}", exc_info=True)
+        if "429" in str(e):
+            raise HTTPException(status_code=429, detail="Gemini API rate limit exceeded. Wait a minute and try again.")
         raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}")

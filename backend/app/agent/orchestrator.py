@@ -1,4 +1,5 @@
 import logging
+import time
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 
@@ -34,7 +35,7 @@ LOCAL_TOOLS = [
 
 def _get_llm() -> ChatGoogleGenerativeAI:
     return ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         google_api_key=settings.gemini_api_key,
         temperature=0.7,
     )
@@ -57,13 +58,23 @@ def build_agent() -> AgentExecutor:
     return executor
 
 
-def invoke_agent(message: str, session_id: str, executor: AgentExecutor) -> str:
-    """Invoke the agent with conversation memory."""
+def invoke_agent(message: str, session_id: str, executor: AgentExecutor, retries: int = 2) -> str:
+    """Invoke the agent with conversation memory and retry on rate limits."""
     memory = get_memory(session_id)
-    response = executor.invoke(
-        {"input": message, "chat_history": memory.chat_memory.messages}
-    )
-    output = response["output"]
-    memory.chat_memory.add_user_message(message)
-    memory.chat_memory.add_ai_message(output)
-    return output
+
+    for attempt in range(retries + 1):
+        try:
+            response = executor.invoke(
+                {"input": message, "chat_history": memory.chat_memory.messages}
+            )
+            output = response["output"]
+            memory.chat_memory.add_user_message(message)
+            memory.chat_memory.add_ai_message(output)
+            return output
+        except Exception as e:
+            if "429" in str(e) and attempt < retries:
+                wait = 5 * (attempt + 1)
+                logger.warning(f"Rate limited, retrying in {wait}s (attempt {attempt + 1}/{retries})")
+                time.sleep(wait)
+                continue
+            raise

@@ -1,8 +1,11 @@
 import logging
+from pathlib import Path
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from app.config import settings
 from app.api.routes_health import router as health_router
@@ -41,3 +44,12 @@ app.include_router(chat_router)
 app.include_router(voice_router)
 app.include_router(alexa_router)
 app.include_router(ws_router)
+
+# Serve frontend
+STATIC_DIR = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+@app.get("/")
+async def serve_ui():
+    return FileResponse(STATIC_DIR / "index.html")
