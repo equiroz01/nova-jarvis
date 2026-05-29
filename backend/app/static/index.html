@@ -555,14 +555,14 @@ body::before{
     </div>
 
     <div class="voice-bar hidden" id="handsfreeBar">
-      <div class="hf-indicator" id="hfIndicator">
+      <button class="mic-btn" id="hfToggleBtn" onclick="toggleHandsfree()">
         <div class="hf-ring" id="hfRing"></div>
         <svg class="hf-mic-icon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
           <path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/>
         </svg>
-      </div>
-      <span class="voice-status" id="hfStatus">LISTENING...</span>
+      </button>
+      <span class="voice-status" id="hfStatus">PRESS TO ACTIVATE</span>
       <div class="waveform" id="hfWaveform"></div>
     </div>
 
@@ -673,7 +673,6 @@ function setInputMode(mode) {
   document.getElementById('handsfreeBar').classList.toggle('hidden', mode !== 'handsfree');
   document.getElementById('textBar').style.display = mode === 'text' ? 'flex' : 'none';
   if (mode === 'text') document.getElementById('textInput').focus();
-  if (mode === 'handsfree') startHandsfree();
 }
 
 // ── Text Send ──
@@ -924,6 +923,14 @@ const VAD_SILENCE_MS = 1500;       // ms of silence to stop recording
 const VAD_MIN_SPEECH_MS = 300;     // minimum speech duration to send
 let hfSpeechStart = 0;
 
+function toggleHandsfree() {
+  if (hfActive) {
+    stopHandsfree();
+  } else {
+    startHandsfree();
+  }
+}
+
 async function startHandsfree() {
   if (hfActive) return;
   try {
@@ -1111,26 +1118,31 @@ function setHfState(state) {
   const ring = document.getElementById('hfRing');
   const status = document.getElementById('hfStatus');
   const wf = document.getElementById('hfWaveform');
+  const btn = document.getElementById('hfToggleBtn');
   if (!ring) return;
   ring.className = 'hf-ring';
+  btn.className = 'mic-btn';
   status.className = 'voice-status';
   if (state === 'listening') {
     ring.classList.add('listening');
+    btn.classList.add('recording');
     status.textContent = 'LISTENING...';
     wf.classList.add('active');
   } else if (state === 'speech') {
     ring.classList.add('speech');
+    btn.classList.add('recording');
     status.textContent = 'HEARING YOU...';
     status.classList.add('recording');
     wf.classList.add('active');
   } else if (state === 'processing') {
     ring.classList.add('processing');
+    btn.classList.add('processing');
     status.textContent = 'PROCESSING...';
     status.classList.add('processing');
     wf.classList.remove('active');
   } else {
     wf.classList.remove('active');
-    status.textContent = 'STOPPED';
+    status.textContent = 'PRESS TO ACTIVATE';
   }
 }
 
