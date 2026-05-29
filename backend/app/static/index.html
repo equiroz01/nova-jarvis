@@ -343,7 +343,8 @@ body::before{
   transition:all 0.3s;
 }
 .input-tab:first-child{border-radius:var(--radius) 0 0 var(--radius)}
-.input-tab:last-child{border-radius:0 var(--radius) var(--radius) 0;border-left:none}
+.input-tab:last-child{border-radius:0 var(--radius) var(--radius) 0}
+.input-tab+.input-tab{border-left:none}
 .input-tab.active{
   color:var(--cyan);border-color:rgba(0,229,255,0.2);
   background:rgba(0,229,255,0.05);
@@ -411,6 +412,44 @@ body::before{
   border-left:2px solid var(--cyan-dim);
   padding-left:10px;margin:6px 0;opacity:0.8;
 }
+
+/* Hands-free indicator */
+.hf-indicator{
+  width:48px;height:48px;position:relative;
+  display:flex;align-items:center;justify-content:center;
+}
+.hf-ring{
+  position:absolute;inset:0;border-radius:50%;
+  border:2px solid var(--cyan-dim);
+  transition:all 0.3s;
+}
+.hf-ring.listening{
+  border-color:var(--cyan);
+  animation:hfPulse 2s ease-in-out infinite;
+}
+.hf-ring.speech{
+  border-color:var(--green);
+  box-shadow:0 0 16px rgba(0,230,118,0.3);
+  animation:hfSpeech 0.6s ease-in-out infinite;
+}
+.hf-ring.processing{
+  border-color:var(--amber);
+  animation:procSpin 2s linear infinite;
+}
+.hf-mic-icon{width:20px;height:20px;stroke:var(--cyan);z-index:1;transition:stroke 0.3s}
+.hf-ring.speech+svg,.hf-ring.speech~svg{stroke:var(--green)}
+.hf-ring.processing+svg,.hf-ring.processing~svg{stroke:var(--amber)}
+
+@keyframes hfPulse{
+  0%,100%{opacity:0.4;transform:scale(1)}
+  50%{opacity:1;transform:scale(1.05)}
+}
+@keyframes hfSpeech{
+  0%,100%{transform:scale(1)}
+  50%{transform:scale(1.1)}
+}
+
+.input-tab:last-child{border-radius:0 var(--radius) var(--radius) 0;border-left:none}
 
 /* Theme toggle */
 .theme-toggle{
@@ -501,6 +540,7 @@ body::before{
     <div class="input-tabs">
       <button class="input-tab active" data-mode="text" onclick="setInputMode('text')">TEXT</button>
       <button class="input-tab" data-mode="voice" onclick="setInputMode('voice')">VOICE</button>
+      <button class="input-tab" data-mode="handsfree" onclick="setInputMode('handsfree')">HANDS-FREE</button>
     </div>
 
     <div class="voice-bar hidden" id="voiceBar">
@@ -512,6 +552,18 @@ body::before{
         </svg>
       </button>
       <div class="waveform" id="waveform"></div>
+    </div>
+
+    <div class="voice-bar hidden" id="handsfreeBar">
+      <div class="hf-indicator" id="hfIndicator">
+        <div class="hf-ring" id="hfRing"></div>
+        <svg class="hf-mic-icon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/>
+        </svg>
+      </div>
+      <span class="voice-status" id="hfStatus">LISTENING...</span>
+      <div class="waveform" id="hfWaveform"></div>
     </div>
 
     <div class="text-input-row" id="textBar">
@@ -610,12 +662,18 @@ async function checkHealth() {
 
 // ── Input Mode ──
 function setInputMode(mode) {
+  // Stop previous mode
+  if (inputMode === 'handsfree') stopHandsfree();
+  if (inputMode === 'voice' && isRecording) stopRecording();
+
   inputMode = mode;
   document.querySelectorAll('.input-tab').forEach(t =>
     t.classList.toggle('active', t.dataset.mode === mode));
   document.getElementById('voiceBar').classList.toggle('hidden', mode !== 'voice');
+  document.getElementById('handsfreeBar').classList.toggle('hidden', mode !== 'handsfree');
   document.getElementById('textBar').style.display = mode === 'text' ? 'flex' : 'none';
   if (mode === 'text') document.getElementById('textInput').focus();
+  if (mode === 'handsfree') startHandsfree();
 }
 
 // ── Text Send ──
@@ -846,6 +904,245 @@ function speakText(text) {
   utterance.onerror = () => overlay.classList.remove('active');
 
   window.speechSynthesis.speak(utterance);
+}
+
+// ── Hands-Free Mode (VAD: Voice Activity Detection) ──
+let hfStream = null;
+let hfContext = null;
+let hfAnalyser = null;
+let hfSource = null;
+let hfProcessor = null;
+let hfSamples = [];
+let hfActive = false;
+let hfState = 'idle'; // idle, listening, speech, processing
+let hfSilenceStart = 0;
+let hfSpeechDetected = false;
+let hfRAF = null;
+
+const VAD_SPEECH_THRESHOLD = 25;   // audio level to detect speech
+const VAD_SILENCE_MS = 1500;       // ms of silence to stop recording
+const VAD_MIN_SPEECH_MS = 300;     // minimum speech duration to send
+let hfSpeechStart = 0;
+
+async function startHandsfree() {
+  if (hfActive) return;
+  try {
+    hfStream = await navigator.mediaDevices.getUserMedia({
+      audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true }
+    });
+    hfContext = new AudioContext({ sampleRate: 16000 });
+    hfSource = hfContext.createMediaStreamSource(hfStream);
+
+    hfAnalyser = hfContext.createAnalyser();
+    hfAnalyser.fftSize = 512;
+    hfSource.connect(hfAnalyser);
+
+    // Processor to capture audio
+    hfProcessor = hfContext.createScriptProcessor(4096, 1, 1);
+    hfProcessor.onaudioprocess = (e) => {
+      if (hfSpeechDetected) {
+        hfSamples.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+      }
+    };
+    hfSource.connect(hfProcessor);
+    hfProcessor.connect(hfContext.destination);
+
+    hfActive = true;
+    hfSamples = [];
+    hfSpeechDetected = false;
+    initHfWaveform();
+    setHfState('listening');
+    hfVADLoop();
+  } catch (e) {
+    console.error('Hands-free mic error:', e);
+    addMessage('Microphone access denied. Allow mic access for hands-free mode.', 'jarvis');
+    setInputMode('text');
+  }
+}
+
+function stopHandsfree() {
+  hfActive = false;
+  cancelAnimationFrame(hfRAF);
+  if (hfProcessor) { hfProcessor.disconnect(); hfProcessor = null; }
+  if (hfSource) { hfSource.disconnect(); hfSource = null; }
+  if (hfAnalyser) { hfAnalyser.disconnect(); hfAnalyser = null; }
+  if (hfStream) { hfStream.getTracks().forEach(t => t.stop()); hfStream = null; }
+  if (hfContext) { hfContext.close(); hfContext = null; }
+  hfSamples = [];
+  hfSpeechDetected = false;
+  setHfState('idle');
+}
+
+function hfVADLoop() {
+  if (!hfActive || !hfAnalyser) return;
+
+  const data = new Uint8Array(hfAnalyser.frequencyBinCount);
+  hfAnalyser.getByteFrequencyData(data);
+  const level = data.reduce((a, b) => a + b, 0) / data.length;
+
+  // Update waveform
+  const bars = document.getElementById('hfWaveform').querySelectorAll('.waveform-bar');
+  if (bars.length) {
+    const subset = new Uint8Array(hfAnalyser.frequencyBinCount);
+    hfAnalyser.getByteFrequencyData(subset);
+    bars.forEach((b, i) => {
+      b.style.height = Math.max(4, (subset[i] || 0) / 255 * 28) + 'px';
+    });
+  }
+
+  const now = Date.now();
+
+  if (hfState === 'listening') {
+    if (level > VAD_SPEECH_THRESHOLD) {
+      // Speech detected!
+      hfSpeechDetected = true;
+      hfSpeechStart = now;
+      hfSamples = [];
+      setHfState('speech');
+    }
+  } else if (hfState === 'speech') {
+    if (level > VAD_SPEECH_THRESHOLD) {
+      hfSilenceStart = 0; // reset silence timer
+    } else {
+      if (hfSilenceStart === 0) hfSilenceStart = now;
+      if (now - hfSilenceStart > VAD_SILENCE_MS) {
+        // Silence long enough — send if we have enough speech
+        if (now - hfSpeechStart > VAD_MIN_SPEECH_MS) {
+          hfSendAudio();
+        } else {
+          // Too short, ignore and go back to listening
+          hfSamples = [];
+          hfSpeechDetected = false;
+          hfSilenceStart = 0;
+          setHfState('listening');
+        }
+        return; // stop loop, will restart after response
+      }
+    }
+  }
+
+  hfRAF = requestAnimationFrame(hfVADLoop);
+}
+
+async function hfSendAudio() {
+  setHfState('processing');
+  hfSpeechDetected = false;
+  hfSilenceStart = 0;
+
+  const wavBlob = samplesToWav(hfSamples, hfContext ? hfContext.sampleRate : 16000);
+  hfSamples = [];
+
+  hideWelcome();
+  showTyping();
+
+  const form = new FormData();
+  form.append('audio', wavBlob, 'recording.wav');
+  form.append('session_id', sessionId);
+
+  try {
+    const r = await fetch(API + '/voice', { method: 'POST', body: form });
+    const data = await r.json();
+    hideTyping();
+    if (data.transcript) addMessage(data.transcript, 'user');
+    addMessage(data.response, 'jarvis');
+
+    // Play audio and wait for it to finish before resuming listening
+    if (data.audio_base64) {
+      await playAudioAsync(data.audio_base64);
+    } else {
+      await speakTextAsync(data.response);
+    }
+  } catch (e) {
+    hideTyping();
+    addMessage('Voice processing failed. Check backend.', 'jarvis');
+  }
+
+  // Resume listening
+  if (hfActive && inputMode === 'handsfree') {
+    setHfState('listening');
+    hfVADLoop();
+  }
+}
+
+// Async versions that resolve when audio finishes
+function playAudioAsync(b64) {
+  return new Promise(resolve => {
+    const overlay = document.getElementById('speakingOverlay');
+    const bytes = atob(b64);
+    const arr = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+    const blob = new Blob([arr], { type: 'audio/mp3' });
+    const url = URL.createObjectURL(blob);
+    if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+    currentAudio = new Audio(url);
+    overlay.classList.add('active');
+    currentAudio.onended = () => { overlay.classList.remove('active'); URL.revokeObjectURL(url); resolve(); };
+    currentAudio.onerror = () => { overlay.classList.remove('active'); resolve(); };
+    currentAudio.play();
+  });
+}
+
+function speakTextAsync(text) {
+  if (!ttsEnabled || !('speechSynthesis' in window)) return Promise.resolve();
+  return new Promise(resolve => {
+    window.speechSynthesis.cancel();
+    const clean = text.replace(/\*\*(.+?)\*\*/g,'$1').replace(/\*(.+?)\*/g,'$1')
+      .replace(/`(.+?)`/g,'$1').replace(/\[(.+?)\]\(.+?\)/g,'$1')
+      .replace(/^#{1,3}\s+/gm,'').replace(/^[-*+]\s+/gm,'')
+      .replace(/^\d+[.)]\s+/gm,'').replace(/\n+/g,'. ').trim();
+    const overlay = document.getElementById('speakingOverlay');
+    const utterance = new SpeechSynthesisUtterance(clean);
+    const spanishPattern = /[áéíóúñ¿¡]|hola|noticias|aquí|tienes|puedes/i;
+    utterance.lang = spanishPattern.test(clean) ? 'es-ES' : 'en-US';
+    utterance.rate = 1.05;
+    const voices = window.speechSynthesis.getVoices();
+    const langPrefix = utterance.lang.slice(0,2);
+    const preferred = voices.find(v => v.lang.startsWith(langPrefix)) || voices[0];
+    if (preferred) utterance.voice = preferred;
+    utterance.onstart = () => overlay.classList.add('active');
+    utterance.onend = () => { overlay.classList.remove('active'); resolve(); };
+    utterance.onerror = () => { overlay.classList.remove('active'); resolve(); };
+    window.speechSynthesis.speak(utterance);
+  });
+}
+
+function setHfState(state) {
+  hfState = state;
+  const ring = document.getElementById('hfRing');
+  const status = document.getElementById('hfStatus');
+  const wf = document.getElementById('hfWaveform');
+  if (!ring) return;
+  ring.className = 'hf-ring';
+  status.className = 'voice-status';
+  if (state === 'listening') {
+    ring.classList.add('listening');
+    status.textContent = 'LISTENING...';
+    wf.classList.add('active');
+  } else if (state === 'speech') {
+    ring.classList.add('speech');
+    status.textContent = 'HEARING YOU...';
+    status.classList.add('recording');
+    wf.classList.add('active');
+  } else if (state === 'processing') {
+    ring.classList.add('processing');
+    status.textContent = 'PROCESSING...';
+    status.classList.add('processing');
+    wf.classList.remove('active');
+  } else {
+    wf.classList.remove('active');
+    status.textContent = 'STOPPED';
+  }
+}
+
+function initHfWaveform() {
+  const wf = document.getElementById('hfWaveform');
+  if (wf.children.length === 0) {
+    for (let i = 0; i < 24; i++) {
+      const bar = document.createElement('div');
+      bar.className = 'waveform-bar';
+      wf.appendChild(bar);
+    }
+  }
 }
 
 // ── Markdown Renderer (safe DOM-based, no innerHTML) ──
