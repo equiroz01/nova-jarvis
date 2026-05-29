@@ -32,6 +32,13 @@ fi
 # Copy .env to backend dir so uvicorn picks it up
 cp "$ENV_FILE" "$BACKEND_DIR/.env"
 
+# Export Google Cloud credentials if configured
+GCLOUD_CREDS=$(grep "^GOOGLE_APPLICATION_CREDENTIALS=" "$ENV_FILE" 2>/dev/null | cut -d= -f2-)
+if [ -n "$GCLOUD_CREDS" ] && [ -f "$GCLOUD_CREDS" ]; then
+  export GOOGLE_APPLICATION_CREDENTIALS="$GCLOUD_CREDS"
+  echo "Google Cloud credentials loaded"
+fi
+
 # Start backend
 echo ""
 echo "Starting backend on http://localhost:8080"

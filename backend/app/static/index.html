@@ -646,7 +646,8 @@ async function sendText() {
     const data = await r.json();
     hideTyping();
     addMessage(data.response, 'jarvis');
-    speakText(data.response);
+    if (data.audio_base64) playAudio(data.audio_base64);
+    else speakText(data.response);
   } catch (e) {
     hideTyping();
     addMessage('Connection error. Backend may be offline.', 'jarvis');
