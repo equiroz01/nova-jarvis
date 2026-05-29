@@ -4,7 +4,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 
 from app.config import settings
-from app.agent.prompts import agent_prompt
+from app.agent.prompts import build_prompt
 from app.agent.session import get_memory
 from app.tools.cloud.time_tool import get_time
 from app.tools.cloud.search_tool import web_search
@@ -41,30 +41,39 @@ def _get_llm() -> ChatGoogleGenerativeAI:
     )
 
 
-def build_agent() -> AgentExecutor:
-    """Build the default agent executor with cloud tools only."""
-    llm = _get_llm()
-    all_tools = list(CLOUD_TOOLS) + list(LOCAL_TOOLS)
+ALL_TOOLS = list(CLOUD_TOOLS) + list(LOCAL_TOOLS)
 
-    agent = create_tool_calling_agent(llm=llm, tools=all_tools, prompt=agent_prompt)
-    executor = AgentExecutor(
+
+def build_agent() -> str:
+    """Verify LLM and tools at startup. Returns status string."""
+    llm = _get_llm()
+    logger.info(f"LLM ready: {llm.model}")
+    logger.info(f"Agent built with {len(ALL_TOOLS)} tools: {[t.name for t in ALL_TOOLS]}")
+    return "ready"
+
+
+def _create_executor() -> AgentExecutor:
+    """Create a fresh agent executor with current date/time in the prompt."""
+    llm = _get_llm()
+    prompt = build_prompt()
+    agent = create_tool_calling_agent(llm=llm, tools=ALL_TOOLS, prompt=prompt)
+    return AgentExecutor(
         agent=agent,
-        tools=all_tools,
+        tools=ALL_TOOLS,
         verbose=True,
         handle_parsing_errors=True,
         max_iterations=5,
     )
-    logger.info(f"Agent built with {len(all_tools)} tools: {[t.name for t in all_tools]}")
-    return executor
 
 
-def invoke_agent(message: str, session_id: str, executor: AgentExecutor, retries: int = 2) -> str:
-    """Invoke the agent with conversation memory and retry on rate limits."""
+def invoke_agent(message: str, session_id: str, executor=None, retries: int = 2) -> str:
+    """Invoke the agent with fresh date context, conversation memory, and retry on rate limits."""
     memory = get_memory(session_id)
+    fresh_executor = _create_executor()
 
     for attempt in range(retries + 1):
         try:
-            response = executor.invoke(
+            response = fresh_executor.invoke(
                 {"input": message, "chat_history": memory.chat_memory.messages}
             )
             output = response["output"]
