@@ -917,10 +917,12 @@ let hfState = 'idle'; // idle, listening, speech, processing
 let hfSilenceStart = 0;
 let hfSpeechDetected = false;
 let hfRAF = null;
+let hfMuted = false; // true while Jarvis is speaking to prevent self-listening
 
 const VAD_SPEECH_THRESHOLD = 25;   // audio level to detect speech
 const VAD_SILENCE_MS = 1500;       // ms of silence to stop recording
 const VAD_MIN_SPEECH_MS = 300;     // minimum speech duration to send
+const VAD_RESUME_DELAY_MS = 800;   // delay after Jarvis stops speaking before listening
 let hfSpeechStart = 0;
 
 function toggleHandsfree() {
@@ -967,6 +969,26 @@ async function startHandsfree() {
   }
 }
 
+function hfMute() {
+  hfMuted = true;
+  cancelAnimationFrame(hfRAF);
+  // Disconnect processor so it doesn't buffer Jarvis's voice
+  if (hfProcessor && hfSource) {
+    try { hfSource.disconnect(hfProcessor); } catch(e) {}
+  }
+}
+
+function hfUnmute() {
+  hfMuted = false;
+  hfSamples = [];
+  hfSpeechDetected = false;
+  hfSilenceStart = 0;
+  // Reconnect processor
+  if (hfProcessor && hfSource) {
+    try { hfSource.connect(hfProcessor); } catch(e) {}
+  }
+}
+
 function stopHandsfree() {
   hfActive = false;
   cancelAnimationFrame(hfRAF);
@@ -981,7 +1003,7 @@ function stopHandsfree() {
 }
 
 function hfVADLoop() {
-  if (!hfActive || !hfAnalyser) return;
+  if (!hfActive || !hfAnalyser || hfMuted) return;
 
   const data = new Uint8Array(hfAnalyser.frequencyBinCount);
   hfAnalyser.getByteFrequencyData(data);
@@ -1036,6 +1058,9 @@ async function hfSendAudio() {
   hfSpeechDetected = false;
   hfSilenceStart = 0;
 
+  // Mute mic so Jarvis doesn't hear itself
+  hfMute();
+
   const wavBlob = samplesToWav(hfSamples, hfContext ? hfContext.sampleRate : 16000);
   hfSamples = [];
 
@@ -1069,8 +1094,10 @@ async function hfSendAudio() {
     console.error('Voice error:', e);
   }
 
-  // Resume listening
+  // Resume listening after a delay (let speaker audio fade out)
   if (hfActive && inputMode === 'handsfree') {
+    await new Promise(r => setTimeout(r, VAD_RESUME_DELAY_MS));
+    hfUnmute();
     setHfState('listening');
     hfVADLoop();
   }
