@@ -1,0 +1,36 @@
+{
+  "manifest": {
+    "publishingInformation": {
+      "locales": {
+        "en-US": {
+          "summary": "Jarvis - Your personal AI assistant",
+          "examplePhrases": [
+            "Alexa, ask Jarvis what time is it in London",
+            "Alexa, tell Jarvis to search for AI news",
+            "Alexa, ask Jarvis to check my calendar"
+          ],
+          "name": "Jarvis Assistant",
+          "description": "A personal AI assistant powered by Google Gemini that can answer questions, search the web, manage your calendar, and control smart home devices."
+        }
+      },
+      "isAvailableWorldwide": false,
+      "testingInstructions": "Say 'Alexa, open Jarvis' to start.",
+      "category": "KNOWLEDGE_AND_TRIVIA"
+    },
+    "apis": {
+      "custom": {
+        "endpoint": {
+          "uri": "arn:aws:lambda:us-east-1:XXXXXXXXXXXX:function:jarvis-alexa-skill"
+        }
+      }
+    },
+    "manifestVersion": "1.0",
+    "privacyAndCompliance": {
+      "allowsPurchases": false,
+      "isExportCompliant": true,
+      "containsAds": false,
+      "isChildDirected": false,
+      "usesPersonalInfo": false
+    }
+  }
+}

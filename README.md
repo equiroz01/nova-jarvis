@@ -1,56 +1,74 @@
-# 🧠 Jarvis – Local Voice-Controlled AI Assistant
+# Jarvis - Voice AI Assistant
 
-**Jarvis** is a voice-activated, conversational AI assistant powered by a local LLM (Qwen via Ollama). It listens for a wake word, processes spoken commands using a local language model with LangChain, and responds out loud via TTS. It supports tool-calling for dynamic functions like checking the current time.
+Hybrid cloud voice assistant powered by Google Gemini. Works with Alexa and Mac.
 
----
+## Architecture
 
-## 🚀 Features
+```
+[Mac Client] --HTTP--> [FastAPI on Cloud Run] <--HTTP-- [Alexa Skill]
+     WebSocket                 |
+  [Local tools]          [Gemini 2.0 Flash + LangChain]
+                               |
+                         [Tools: search, time, calendar, gmail, smart home]
+```
 
-- 🗣 Voice-activated with wake word **"Jarvis"**
-- 🧠 Local language model (Qwen 3 via Ollama)
-- 🔧 Tool-calling with LangChain
-- 🔊 Text-to-speech responses via `pyttsx3`
-- 🌍 Example tool: Get the current time in a given city
-- 🔐 Optional support for OpenAI API integration
+## Components
 
----
+- **backend/** - FastAPI server with Gemini LLM, LangChain agent, and cloud tools
+- **client/** - Mac client with wake word detection and local tool execution
+- **alexa/** - Alexa Skill (Lambda) that forwards queries to the backend
+- **deploy/** - Cloud Build config for Google Cloud Run
 
+## Quick Start
 
-## ▶️ How It Works (`main.py`)
+### 1. Backend
 
-1. **Startup & local LLM Setup**
-   - Initializes a local Ollama model (`qwen3:1.7b`) via `ChatOllama`
-   - Registers tools (`get_time`) using LangChain
+```bash
+cp .env.example .env
+# Add your GEMINI_API_KEY to .env
 
-2. **Wake Word Listening**
-   - Listens via microphone (e.g., `device_index=0`)
-   - If it hears the word **"Jarvis"**, it enters "conversation mode"
+cd backend
+pip install -r requirements.txt
+uvicorn app.main:app --port 8080
+```
 
-3. **Voice Command Handling**
-   - Records the user’s spoken command
-   - Passes the command to the LLM, which may invoke tools
-   - Responds using `pyttsx3` text-to-speech (with optional custom voice)
+### 2. Test
 
-4. **Timeout**
-   - If the user is inactive for more than 30 seconds in conversation mode, it resets to wait for the wake word again.
+```bash
+curl http://localhost:8080/health
+curl -X POST http://localhost:8080/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "What time is it in Tokyo?"}'
+```
 
----
+### 3. Mac Client
 
-## 🤖 How To Start Jarvis
+```bash
+cd client
+pip install -r requirements.txt
+python client.py
+```
 
-1. **Install Dependencies**  
-   Make sure you have installed all required dependencies listed in `requirements.txt`:
-   ```bash
-   pip install -r requirements.txt
-   ```
+### 4. Run Tests
 
-2. **Set Up the Local Model**  
-   Ensure you have the `qwen3:1.7b` model available in Ollama.
+```bash
+cd backend
+pip install -r requirements-test.txt
+pytest -v
+```
 
-3. **Run Jarvis**  
-   Start the assistant by running:
-   ```bash
-   python main.py
-   ```
----
+## Tools
 
+| Tool | Type | Description |
+|------|------|-------------|
+| get_time | Cloud | Current time in 30+ cities |
+| web_search | Cloud | DuckDuckGo search |
+| get_upcoming_events | Cloud | Google Calendar events |
+| create_calendar_event | Cloud | Create calendar events |
+| search_emails | Cloud | Search Gmail |
+| send_email | Cloud | Send email via Gmail |
+| list_smart_devices | Cloud | List Home Assistant devices |
+| control_device | Cloud | Control smart home devices |
+| take_screenshot | Local | Screenshot via Mac client |
+| read_screen_text | Local | OCR via Mac client |
+| run_arp_scan | Local | Network scan via Mac client |

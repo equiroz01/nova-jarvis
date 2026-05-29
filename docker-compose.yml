@@ -1,0 +1,12 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - ./backend/app:/app/app
+    restart: unless-stopped

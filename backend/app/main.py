@@ -1,0 +1,43 @@
+import logging
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.config import settings
+from app.api.routes_health import router as health_router
+from app.api.routes_chat import router as chat_router
+from app.api.routes_voice import router as voice_router
+from app.api.routes_alexa import router as alexa_router
+from app.api.websocket_bridge import router as ws_router
+
+
+logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Jarvis backend starting up...")
+    from app.agent.orchestrator import build_agent
+    app.state.agent_executor = build_agent()
+    logger.info("Agent executor ready.")
+    yield
+    logger.info("Jarvis backend shutting down...")
+
+
+app = FastAPI(title="Jarvis Backend", version="1.0.0", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.allowed_origins.split(","),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(health_router)
+app.include_router(chat_router)
+app.include_router(voice_router)
+app.include_router(alexa_router)
+app.include_router(ws_router)
