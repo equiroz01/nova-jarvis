@@ -4,6 +4,10 @@ from google.cloud import texttospeech
 
 logger = logging.getLogger(__name__)
 
+# Jarvis voice: Orus (Chirp3-HD) for both languages
+VOICE_ES = ("es-US", "es-US-Chirp3-HD-Orus")
+VOICE_EN = ("en-US", "en-US-Chirp3-HD-Orus")
+
 # Spanish detection patterns
 _SPANISH_WORDS = re.compile(
     r'\b(hola|aquí|tienes|puedes|noticias|buscar|hora|tiempo|qué|cómo|dónde|'
@@ -36,35 +40,22 @@ def _strip_markdown(text: str) -> str:
 
 
 def synthesize_speech(text: str) -> bytes:
-    """Convert text to speech using Google Cloud Text-to-Speech. Returns MP3 bytes."""
+    """Convert text to speech using Google Cloud TTS with Orus voice."""
     client = texttospeech.TextToSpeechClient()
 
     clean_text = _strip_markdown(text)
 
-    if _is_spanish(clean_text):
-        language_code = "es-US"
-        voice_name = "es-US-Studio-B"
-    else:
-        language_code = "en-US"
-        voice_name = "en-US-Studio-M"
-
-    synthesis_input = texttospeech.SynthesisInput(text=clean_text)
-
-    voice = texttospeech.VoiceSelectionParams(
-        language_code=language_code,
-        name=voice_name,
-    )
-
-    audio_config = texttospeech.AudioConfig(
-        audio_encoding=texttospeech.AudioEncoding.MP3,
-        speaking_rate=1.0,
-        pitch=0.0,
-    )
+    language_code, voice_name = VOICE_ES if _is_spanish(clean_text) else VOICE_EN
 
     response = client.synthesize_speech(
-        input=synthesis_input,
-        voice=voice,
-        audio_config=audio_config,
+        input=texttospeech.SynthesisInput(text=clean_text),
+        voice=texttospeech.VoiceSelectionParams(
+            language_code=language_code,
+            name=voice_name,
+        ),
+        audio_config=texttospeech.AudioConfig(
+            audio_encoding=texttospeech.AudioEncoding.MP3,
+        ),
     )
 
     logger.info(f"TTS [{voice_name}]: {len(response.audio_content)} bytes")
