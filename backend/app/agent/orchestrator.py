@@ -11,6 +11,7 @@ from app.tools.cloud.search_tool import web_search
 from app.tools.cloud.calendar_tool import get_upcoming_events, create_calendar_event
 from app.tools.cloud.gmail_tool import search_emails, send_email
 from app.tools.cloud.smart_home_tool import list_smart_devices, control_device
+from app.tools.cloud.brain_tool import remember, recall, read_memory, brain_stats
 from app.tools.local.proxy import take_screenshot, read_screen_text, run_arp_scan
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,10 @@ CLOUD_TOOLS = [
     send_email,
     list_smart_devices,
     control_device,
+    remember,
+    recall,
+    read_memory,
+    brain_stats,
 ]
 
 LOCAL_TOOLS = [

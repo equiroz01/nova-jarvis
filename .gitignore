@@ -16,3 +16,5 @@ jarvis_screenshot.png
 *.wav
 secrets/
 *.json
+nova-brain/
+knowledge_data/
