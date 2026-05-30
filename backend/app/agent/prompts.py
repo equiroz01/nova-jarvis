@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 PERSONA_PATH = Path(__file__).parent.parent.parent / "persona.yaml"
 
-SYSTEM_TEMPLATE = """You are Jarvis, a personal AI assistant.
+SYSTEM_TEMPLATE = """You are N.O.V.A. (Neural Operative Voice Assistant), a personal AI assistant.
 
 CURRENT CONTEXT:
 - Date: {current_date}

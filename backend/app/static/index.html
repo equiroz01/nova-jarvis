@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>J.A.R.V.I.S.</title>
+<title>N.O.V.A.</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <style>
@@ -211,27 +211,102 @@ body::before{
 /* Welcome */
 .welcome{
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  flex:1;gap:16px;opacity:0.6;
-}
-.welcome-icon{
-  width:80px;height:80px;
-  border:2px solid var(--cyan-dim);border-radius:50%;
-  display:flex;align-items:center;justify-content:center;
-  animation:welcomePulse 3s ease-in-out infinite;
-}
-@keyframes welcomePulse{
-  0%,100%{border-color:rgba(0,229,255,0.1);box-shadow:none}
-  50%{border-color:rgba(0,229,255,0.25);box-shadow:0 0 30px rgba(0,229,255,0.08)}
-}
-.welcome-icon svg{width:32px;height:32px;stroke:var(--cyan);opacity:0.5}
-.welcome h2{
-  font-family:'Orbitron',sans-serif;font-weight:500;font-size:14px;
-  letter-spacing:6px;color:var(--text-secondary);
+  flex:1;gap:20px;
 }
 .welcome p{
   font-size:13px;color:var(--text-muted);
   font-family:'Share Tech Mono',monospace;letter-spacing:1px;
 }
+
+/* ── Arc Reactor HUD ── */
+.arc-reactor{
+  width:200px;height:200px;position:relative;
+  display:flex;align-items:center;justify-content:center;
+}
+.arc-reactor-sm{width:50px;height:50px}
+
+.arc-ring{
+  position:absolute;border-radius:50%;
+  border:2px solid var(--cyan);
+  opacity:0.3;
+}
+.arc-ring-outer{
+  inset:0;
+  border-style:dashed;
+  border-width:2px;
+  animation:arcSpin 20s linear infinite;
+}
+.arc-ring-middle{
+  inset:14px;
+  border-width:1px;
+  border-color:var(--cyan);
+  opacity:0.5;
+  animation:arcSpin 12s linear infinite reverse;
+}
+.arc-ring-inner{
+  inset:30px;
+  border-width:2px;
+  border-color:var(--cyan);
+  opacity:0.6;
+  animation:arcSpin 8s linear infinite;
+}
+.arc-reactor-sm .arc-ring-outer{border-width:1px}
+.arc-reactor-sm .arc-ring-middle{inset:4px;border-width:1px}
+.arc-reactor-sm .arc-ring-inner{inset:8px;border-width:1px}
+
+@keyframes arcSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+
+/* Segments around the ring */
+.arc-segments{position:absolute;inset:4px;border-radius:50%}
+.arc-seg{
+  position:absolute;
+  width:3px;height:14px;
+  background:var(--cyan);
+  top:0;left:50%;
+  transform-origin:50% calc(50% + 86px);
+  transform:translateX(-50%) rotate(calc(var(--i) * 45deg));
+  opacity:0.4;
+  animation:segPulse 2s ease-in-out infinite;
+  animation-delay:calc(var(--i) * 0.15s);
+  border-radius:1px;
+}
+.arc-reactor-sm .arc-seg{width:2px;height:4px;transform-origin:50% calc(50% + 21px)}
+
+@keyframes segPulse{
+  0%,100%{opacity:0.2;height:14px}
+  50%{opacity:0.8;height:18px}
+}
+
+.arc-core{
+  font-family:'Orbitron',sans-serif;
+  font-weight:700;font-size:22px;letter-spacing:4px;
+  color:var(--cyan);z-index:1;
+  text-shadow:0 0 20px rgba(0,229,255,0.4);
+  animation:corePulse 3s ease-in-out infinite;
+}
+.arc-core-sm{font-size:10px;letter-spacing:1px}
+
+@keyframes corePulse{
+  0%,100%{text-shadow:0 0 10px rgba(0,229,255,0.2);opacity:0.7}
+  50%{text-shadow:0 0 25px rgba(0,229,255,0.6);opacity:1}
+}
+
+/* Speaking state — reactor glows brighter and spins faster */
+.arc-speaking .arc-ring-outer{
+  animation:arcSpin 3s linear infinite;
+  opacity:0.7;border-color:var(--cyan);
+  box-shadow:0 0 15px rgba(0,229,255,0.2);
+}
+.arc-speaking .arc-ring-middle{
+  animation:arcSpin 2s linear infinite reverse;
+  opacity:0.8;
+}
+.arc-speaking .arc-ring-inner{
+  animation:arcSpin 1.5s linear infinite;
+  opacity:1;box-shadow:inset 0 0 10px rgba(0,229,255,0.15);
+}
+.arc-speaking .arc-seg{animation:segPulse 0.5s ease-in-out infinite}
+.arc-speaking .arc-core{animation:corePulse 1s ease-in-out infinite}
 
 /* ── Bottom Input ── */
 .input-area{
@@ -353,26 +428,13 @@ body::before{
 /* Speaking animation overlay */
 .speaking-overlay{
   position:fixed;bottom:140px;left:50%;transform:translateX(-50%);
-  display:none;align-items:center;gap:10px;
-  padding:8px 20px;border-radius:20px;
+  display:none;align-items:center;gap:12px;
+  padding:10px 22px 10px 14px;border-radius:30px;
   background:rgba(0,229,255,0.06);border:1px solid rgba(0,229,255,0.15);
+  backdrop-filter:blur(10px);
   z-index:10;
 }
 .speaking-overlay.active{display:flex}
-.speaking-bars{display:flex;align-items:center;gap:3px;height:20px}
-.speaking-bars span{
-  width:3px;border-radius:2px;background:var(--cyan);
-  animation:speakBar 0.8s ease-in-out infinite;
-}
-.speaking-bars span:nth-child(1){height:6px;animation-delay:0s}
-.speaking-bars span:nth-child(2){height:14px;animation-delay:0.1s}
-.speaking-bars span:nth-child(3){height:20px;animation-delay:0.2s}
-.speaking-bars span:nth-child(4){height:14px;animation-delay:0.3s}
-.speaking-bars span:nth-child(5){height:6px;animation-delay:0.4s}
-@keyframes speakBar{
-  0%,100%{transform:scaleY(0.4);opacity:0.4}
-  50%{transform:scaleY(1);opacity:1}
-}
 .speaking-label{
   font-family:'Share Tech Mono',monospace;font-size:10px;
   color:var(--cyan);letter-spacing:2px;
@@ -480,8 +542,8 @@ body::before{
   <header class="topbar">
     <div class="topbar-left">
       <div>
-        <div class="logo">J.A.R.V.I.S.</div>
-        <div class="logo-sub">VOICE COMMAND INTERFACE</div>
+        <div class="logo">N.O.V.A.</div>
+        <div class="logo-sub">NEURAL OPERATIVE VOICE ASSISTANT</div>
       </div>
     </div>
     <div class="topbar-right">
@@ -511,26 +573,40 @@ body::before{
   <!-- Chat -->
   <div class="chat-container" id="chatContainer">
     <div class="welcome" id="welcome">
-      <div class="welcome-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
-          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/>
-        </svg>
+      <div class="arc-reactor" id="arcReactor">
+        <div class="arc-ring arc-ring-outer"></div>
+        <div class="arc-ring arc-ring-middle"></div>
+        <div class="arc-ring arc-ring-inner"></div>
+        <div class="arc-segments">
+          <div class="arc-seg" style="--i:0"></div><div class="arc-seg" style="--i:1"></div>
+          <div class="arc-seg" style="--i:2"></div><div class="arc-seg" style="--i:3"></div>
+          <div class="arc-seg" style="--i:4"></div><div class="arc-seg" style="--i:5"></div>
+          <div class="arc-seg" style="--i:6"></div><div class="arc-seg" style="--i:7"></div>
+        </div>
+        <div class="arc-core">N.O.V.A.</div>
       </div>
-      <h2>SYSTEMS ONLINE</h2>
       <p>Type or use voice to interact</p>
     </div>
 
     <div class="typing-indicator" id="typingIndicator">
-      <span class="msg-label">JARVIS</span>
+      <span class="msg-label">N.O.V.A.</span>
       <div class="typing-dots"><span></span><span></span><span></span></div>
     </div>
   </div>
 
   <!-- Speaking overlay -->
   <div class="speaking-overlay" id="speakingOverlay">
-    <div class="speaking-bars">
-      <span></span><span></span><span></span><span></span><span></span>
+    <div class="arc-reactor arc-reactor-sm arc-speaking">
+      <div class="arc-ring arc-ring-outer"></div>
+      <div class="arc-ring arc-ring-middle"></div>
+      <div class="arc-ring arc-ring-inner"></div>
+      <div class="arc-segments">
+        <div class="arc-seg" style="--i:0"></div><div class="arc-seg" style="--i:1"></div>
+        <div class="arc-seg" style="--i:2"></div><div class="arc-seg" style="--i:3"></div>
+        <div class="arc-seg" style="--i:4"></div><div class="arc-seg" style="--i:5"></div>
+        <div class="arc-seg" style="--i:6"></div><div class="arc-seg" style="--i:7"></div>
+      </div>
+      <div class="arc-core arc-core-sm">N</div>
     </div>
     <span class="speaking-label">SPEAKING</span>
   </div>
@@ -1270,7 +1346,7 @@ function addMessage(text, who) {
 
   const label = document.createElement('div');
   label.className = 'msg-label';
-  label.textContent = who === 'user' ? 'YOU' : 'JARVIS';
+  label.textContent = who === 'user' ? 'YOU' : 'N.O.V.A.';
 
   const bubble = document.createElement('div');
   bubble.className = 'msg ' + (who === 'user' ? 'user-msg' : 'jarvis-msg');
