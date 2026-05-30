@@ -17,3 +17,4 @@ google-auth-oauthlib>=1.2.0
 # Tools
 ddgs>=7.0.0
 pytz>=2025.0
+pyyaml>=6.0
