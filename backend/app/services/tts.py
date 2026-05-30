@@ -4,9 +4,9 @@ from google.cloud import texttospeech
 
 logger = logging.getLogger(__name__)
 
-# Jarvis voice: Orus (Chirp3-HD) for both languages
-VOICE_ES = ("es-US", "es-US-Chirp3-HD-Orus")
-VOICE_EN = ("en-US", "en-US-Chirp3-HD-Orus")
+# Jarvis voice: Charon (Chirp3-HD) for both languages
+VOICE_ES = ("es-US", "es-US-Chirp3-HD-Charon")
+VOICE_EN = ("en-US", "en-US-Chirp3-HD-Charon")
 
 # Spanish detection patterns
 _SPANISH_WORDS = re.compile(
