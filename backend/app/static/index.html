@@ -771,32 +771,67 @@ async function sendText() {
   showTyping();
 
   try {
-    // Step 1: Get text response fast (no TTS)
-    const r = await fetch(API + '/chat', {
+    // Stream response token by token
+    const r = await fetch(API + '/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: msg, session_id: sessionId, tts: false })
+      body: JSON.stringify({ message: msg, session_id: sessionId })
     });
-    const data = await r.json();
-    hideTyping();
-    addMessage(data.response, 'jarvis');
 
-    // Step 2: Start browser TTS immediately (instant)
-    speakText(data.response);
+    const reader = r.body.getReader();
+    const decoder = new TextDecoder();
+    let streamBubble = null;
+    let fullResponse = '';
+    let firstToken = true;
 
-    // Step 3: Request edge-tts audio in background, swap when ready
-    if (ttsEnabled) {
-      fetch(API + '/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: data.response })
-      }).then(r => r.json()).then(ttsData => {
-        if (ttsData.audio_base64) {
-          // Stop browser TTS and play the better audio
-          window.speechSynthesis.cancel();
-          playAudio(ttsData.audio_base64);
-        }
-      }).catch(() => {}); // browser TTS already playing as fallback
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const text = decoder.decode(value, { stream: true });
+      const lines = text.split('\n');
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const data = JSON.parse(line.slice(6));
+
+          if (data.type === 'token') {
+            if (firstToken) {
+              hideTyping();
+              streamBubble = addStreamMessage();
+              firstToken = false;
+            }
+            fullResponse += data.content;
+            updateStreamMessage(streamBubble, fullResponse);
+          }
+
+          if (data.type === 'done') {
+            if (firstToken) { hideTyping(); addMessage(data.response, 'jarvis'); }
+            fullResponse = data.response;
+
+            // TTS: browser speaks immediately, edge-tts replaces in background
+            speakText(fullResponse);
+            if (ttsEnabled) {
+              fetch(API + '/tts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: fullResponse })
+              }).then(r => r.json()).then(ttsData => {
+                if (ttsData.audio_base64) {
+                  window.speechSynthesis.cancel();
+                  playAudio(ttsData.audio_base64);
+                }
+              }).catch(() => {});
+            }
+          }
+
+          if (data.type === 'error') {
+            hideTyping();
+            addMessage(data.detail, 'jarvis');
+          }
+        } catch (e) { /* skip malformed lines */ }
+      }
     }
   } catch (e) {
     hideTyping();
@@ -1384,6 +1419,41 @@ function addMessage(text, who) {
   // Insert before typing indicator
   const typing = document.getElementById('typingIndicator');
   container.insertBefore(group, typing);
+  container.scrollTop = container.scrollHeight;
+}
+
+function addStreamMessage() {
+  const container = document.getElementById('chatContainer');
+  const group = document.createElement('div');
+  group.className = 'msg-group jarvis';
+
+  const label = document.createElement('div');
+  label.className = 'msg-label';
+  label.textContent = 'N.O.V.A.';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'msg jarvis-msg';
+  bubble.id = 'stream-bubble';
+
+  const time_el = document.createElement('div');
+  time_el.className = 'msg-time';
+  time_el.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+  group.appendChild(label);
+  group.appendChild(bubble);
+  group.appendChild(time_el);
+
+  const typing = document.getElementById('typingIndicator');
+  container.insertBefore(group, typing);
+  return bubble;
+}
+
+function updateStreamMessage(bubble, text) {
+  if (!bubble) return;
+  // Clear and re-render markdown
+  while (bubble.firstChild) bubble.removeChild(bubble.firstChild);
+  bubble.appendChild(renderMarkdown(text));
+  const container = document.getElementById('chatContainer');
   container.scrollTop = container.scrollHeight;
 }
 
