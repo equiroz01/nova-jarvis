@@ -771,16 +771,33 @@ async function sendText() {
   showTyping();
 
   try {
+    // Step 1: Get text response fast (no TTS)
     const r = await fetch(API + '/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: msg, session_id: sessionId })
+      body: JSON.stringify({ message: msg, session_id: sessionId, tts: false })
     });
     const data = await r.json();
     hideTyping();
     addMessage(data.response, 'jarvis');
-    if (data.audio_base64) playAudio(data.audio_base64);
-    else speakText(data.response);
+
+    // Step 2: Start browser TTS immediately (instant)
+    speakText(data.response);
+
+    // Step 3: Request edge-tts audio in background, swap when ready
+    if (ttsEnabled) {
+      fetch(API + '/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: data.response })
+      }).then(r => r.json()).then(ttsData => {
+        if (ttsData.audio_base64) {
+          // Stop browser TTS and play the better audio
+          window.speechSynthesis.cancel();
+          playAudio(ttsData.audio_base64);
+        }
+      }).catch(() => {}); // browser TTS already playing as fallback
+    }
   } catch (e) {
     hideTyping();
     addMessage('Connection error. Backend may be offline.', 'jarvis');
