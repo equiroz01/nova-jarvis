@@ -14,6 +14,7 @@ from app.api.routes_voice import router as voice_router
 from app.api.routes_alexa import router as alexa_router
 from app.api.routes_stream import router as stream_router
 from app.api.websocket_bridge import router as ws_router
+from app.api.routes_settings import router as settings_router
 
 
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
@@ -49,6 +50,7 @@ app.include_router(voice_router)
 app.include_router(alexa_router)
 app.include_router(stream_router)
 app.include_router(ws_router)
+app.include_router(settings_router)
 
 # Serve frontend
 STATIC_DIR = Path(__file__).parent / "static"
@@ -58,3 +60,8 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 @app.get("/")
 async def serve_ui():
     return FileResponse(STATIC_DIR / "index.html")
+
+
+@app.get("/settings")
+async def serve_settings():
+    return FileResponse(STATIC_DIR / "settings.html")

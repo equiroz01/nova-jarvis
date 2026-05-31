@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>N.O.V.A. — Settings</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#04070d;--card:#0a1428;--border:rgba(0,229,255,0.1);
+  --cyan:#00e5ff;--cyan-dim:rgba(0,229,255,0.1);
+  --amber:#ffab00;--red:#ff1744;--green:#00e676;
+  --text:#e0f0ff;--text2:#5a7a9a;--text3:#2a3a50;
+}
+body{background:var(--bg);color:var(--text);font-family:'Rajdhani',sans-serif;min-height:100vh}
+
+/* Header */
+.header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 24px;border-bottom:1px solid var(--border);
+  background:rgba(4,7,13,0.95);backdrop-filter:blur(20px);
+}
+.header-left{display:flex;align-items:center;gap:16px}
+.logo{font-family:'Orbitron',sans-serif;font-weight:900;font-size:16px;letter-spacing:5px;
+  background:linear-gradient(135deg,var(--cyan),var(--amber));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.logo-sub{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2);letter-spacing:3px}
+.back-btn{
+  padding:6px 16px;border:1px solid var(--border);border-radius:4px;
+  background:transparent;color:var(--text2);cursor:pointer;
+  font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:2px;
+  text-decoration:none;transition:all 0.3s;
+}
+.back-btn:hover{border-color:var(--cyan);color:var(--cyan);background:var(--cyan-dim)}
+
+/* Content */
+.content{max-width:800px;margin:30px auto;padding:0 20px}
+.section-title{
+  font-family:'Orbitron',sans-serif;font-weight:500;font-size:13px;
+  letter-spacing:4px;color:var(--cyan);margin-bottom:16px;
+  padding-bottom:8px;border-bottom:1px solid var(--border);
+}
+
+/* MCP Cards */
+.mcp-list{display:flex;flex-direction:column;gap:10px;margin-bottom:24px}
+.mcp-card{
+  padding:14px 18px;border:1px solid var(--border);border-radius:6px;
+  background:var(--card);display:flex;align-items:center;gap:14px;
+  transition:border-color 0.3s;
+}
+.mcp-card:hover{border-color:rgba(0,229,255,0.2)}
+.mcp-card.disabled{opacity:0.4}
+
+.mcp-toggle{
+  width:36px;height:20px;border-radius:10px;
+  background:var(--text3);cursor:pointer;position:relative;
+  transition:background 0.3s;flex-shrink:0;border:none;
+}
+.mcp-toggle.on{background:var(--green)}
+.mcp-toggle::after{
+  content:'';position:absolute;top:2px;left:2px;
+  width:16px;height:16px;border-radius:50%;
+  background:#fff;transition:transform 0.3s;
+}
+.mcp-toggle.on::after{transform:translateX(16px)}
+
+.mcp-info{flex:1}
+.mcp-name{font-weight:600;font-size:15px}
+.mcp-desc{font-size:12px;color:var(--text2);margin-top:2px}
+.mcp-meta{
+  font-family:'Share Tech Mono',monospace;font-size:10px;
+  color:var(--text3);margin-top:4px;
+}
+
+.mcp-delete{
+  width:28px;height:28px;border-radius:50%;border:1px solid var(--border);
+  background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  transition:all 0.3s;flex-shrink:0;
+}
+.mcp-delete svg{width:14px;height:14px;stroke:var(--text3)}
+.mcp-delete:hover{border-color:var(--red);background:rgba(255,23,68,0.1)}
+.mcp-delete:hover svg{stroke:var(--red)}
+
+/* Empty state */
+.empty{
+  text-align:center;padding:40px;color:var(--text3);
+  font-family:'Share Tech Mono',monospace;font-size:12px;letter-spacing:2px;
+}
+
+/* Add form */
+.add-form{
+  border:1px solid var(--border);border-radius:6px;
+  background:var(--card);padding:18px;margin-top:16px;
+  display:none;
+}
+.add-form.active{display:block}
+.form-row{display:flex;gap:10px;margin-bottom:10px}
+.form-row.full{flex-direction:column}
+.form-field{flex:1;display:flex;flex-direction:column;gap:4px}
+.form-label{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2);letter-spacing:1px}
+.form-input{
+  padding:8px 12px;background:rgba(0,0,0,0.3);border:1px solid var(--border);
+  border-radius:4px;color:var(--text);font-family:'Rajdhani',sans-serif;font-size:14px;
+  outline:none;transition:border-color 0.3s;
+}
+.form-input:focus{border-color:rgba(0,229,255,0.3)}
+.form-input::placeholder{color:var(--text3)}
+select.form-input{cursor:pointer}
+
+.form-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+.btn{
+  padding:6px 18px;border-radius:4px;border:1px solid var(--border);
+  background:transparent;color:var(--text2);cursor:pointer;
+  font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:1px;
+  transition:all 0.3s;
+}
+.btn:hover{border-color:var(--cyan);color:var(--cyan);background:var(--cyan-dim)}
+.btn-primary{border-color:rgba(0,229,255,0.3);color:var(--cyan);background:rgba(0,229,255,0.05)}
+.btn-primary:hover{background:rgba(0,229,255,0.15)}
+
+.add-btn{
+  width:100%;padding:10px;border:1px dashed var(--border);border-radius:6px;
+  background:transparent;color:var(--text3);cursor:pointer;
+  font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:2px;
+  transition:all 0.3s;
+}
+.add-btn:hover{border-color:var(--cyan);color:var(--cyan);background:var(--cyan-dim)}
+
+/* Preset buttons */
+.presets{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
+.preset{
+  padding:6px 14px;border:1px solid var(--border);border-radius:20px;
+  background:transparent;color:var(--text2);cursor:pointer;
+  font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:1px;
+  transition:all 0.3s;
+}
+.preset:hover{border-color:var(--cyan);color:var(--cyan);background:var(--cyan-dim)}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-left">
+    <div>
+      <div class="logo">N.O.V.A.</div>
+      <div class="logo-sub">SETTINGS</div>
+    </div>
+  </div>
+  <a href="/" class="back-btn">BACK TO CHAT</a>
+</header>
+
+<div class="content">
+  <h2 class="section-title">MCP SERVERS</h2>
+
+  <div class="presets" id="presets">
+    <button class="preset" onclick="addPreset('github')">+ GITHUB</button>
+    <button class="preset" onclick="addPreset('filesystem')">+ FILESYSTEM</button>
+    <button class="preset" onclick="addPreset('brave')">+ BRAVE SEARCH</button>
+    <button class="preset" onclick="addPreset('postgres')">+ POSTGRES</button>
+    <button class="preset" onclick="addPreset('slack')">+ SLACK</button>
+    <button class="preset" onclick="addPreset('google-drive')">+ GOOGLE DRIVE</button>
+  </div>
+
+  <div class="mcp-list" id="mcpList">
+    <div class="empty">NO MCP SERVERS CONFIGURED</div>
+  </div>
+
+  <button class="add-btn" onclick="showAddForm()">+ ADD MCP SERVER</button>
+
+  <div class="add-form" id="addForm">
+    <div class="form-row">
+      <div class="form-field">
+        <span class="form-label">NAME</span>
+        <input class="form-input" id="fName" placeholder="e.g. GitHub">
+      </div>
+      <div class="form-field">
+        <span class="form-label">TYPE</span>
+        <select class="form-input" id="fType" onchange="toggleTypeFields()">
+          <option value="stdio">STDIO</option>
+          <option value="sse">SSE</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row full">
+      <div class="form-field">
+        <span class="form-label">DESCRIPTION</span>
+        <input class="form-input" id="fDesc" placeholder="What does this MCP do?">
+      </div>
+    </div>
+    <div class="form-row" id="stdioFields">
+      <div class="form-field">
+        <span class="form-label">COMMAND</span>
+        <input class="form-input" id="fCmd" placeholder="e.g. npx">
+      </div>
+      <div class="form-field">
+        <span class="form-label">ARGS (comma-separated)</span>
+        <input class="form-input" id="fArgs" placeholder="e.g. -y, @modelcontextprotocol/server-github">
+      </div>
+    </div>
+    <div class="form-row" id="sseFields" style="display:none">
+      <div class="form-field">
+        <span class="form-label">URL</span>
+        <input class="form-input" id="fUrl" placeholder="e.g. http://localhost:3000/sse">
+      </div>
+    </div>
+    <div class="form-row full">
+      <div class="form-field">
+        <span class="form-label">ENV VARS (KEY=VALUE, one per line)</span>
+        <textarea class="form-input" id="fEnv" rows="2" placeholder="GITHUB_TOKEN=ghp_xxx&#10;OTHER_VAR=value"></textarea>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn" onclick="hideAddForm()">CANCEL</button>
+      <button class="btn btn-primary" onclick="saveNewMcp()">SAVE</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = window.location.origin;
+
+const PRESETS = {
+  'github': { name: 'GitHub', description: 'Repos, issues, PRs, code search', type: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-github'], env: { GITHUB_TOKEN: '' } },
+  'filesystem': { name: 'Filesystem', description: 'Read/write local files', type: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem', '/Users/hnl-mac15/Documents'] },
+  'brave': { name: 'Brave Search', description: 'Web search via Brave API', type: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-brave-search'], env: { BRAVE_API_KEY: '' } },
+  'postgres': { name: 'PostgreSQL', description: 'Query PostgreSQL databases', type: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-postgres'], env: { DATABASE_URL: '' } },
+  'slack': { name: 'Slack', description: 'Send/read Slack messages', type: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-slack'], env: { SLACK_BOT_TOKEN: '' } },
+  'google-drive': { name: 'Google Drive', description: 'Access Google Drive files', type: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-google-drive'] },
+};
+
+async function loadServers() {
+  try {
+    const r = await fetch(API + '/api/settings/mcp');
+    const data = await r.json();
+    renderServers(data.servers || []);
+  } catch (e) {
+    console.error('Load error:', e);
+  }
+}
+
+function renderServers(servers) {
+  const list = document.getElementById('mcpList');
+  if (!servers.length) {
+    list.textContent = '';
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.textContent = 'NO MCP SERVERS CONFIGURED';
+    list.appendChild(empty);
+    return;
+  }
+  list.textContent = '';
+  servers.forEach(s => {
+    const card = document.createElement('div');
+    card.className = 'mcp-card' + (s.enabled ? '' : ' disabled');
+
+    const toggle = document.createElement('button');
+    toggle.className = 'mcp-toggle' + (s.enabled ? ' on' : '');
+    toggle.onclick = () => toggleServer(s.name);
+
+    const info = document.createElement('div');
+    info.className = 'mcp-info';
+
+    const name = document.createElement('div');
+    name.className = 'mcp-name';
+    name.textContent = s.name;
+
+    const desc = document.createElement('div');
+    desc.className = 'mcp-desc';
+    desc.textContent = s.description;
+
+    const meta = document.createElement('div');
+    meta.className = 'mcp-meta';
+    const metaParts = [s.type.toUpperCase()];
+    if (s.command) metaParts.push(s.command + ' ' + (s.args || []).join(' '));
+    if (s.url) metaParts.push(s.url);
+    meta.textContent = metaParts.join(' | ');
+
+    info.append(name, desc, meta);
+
+    const del = document.createElement('button');
+    del.className = 'mcp-delete';
+    del.onclick = () => deleteServer(s.name);
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linecap', 'round');
+    const l1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    l1.setAttribute('x1','18');l1.setAttribute('y1','6');l1.setAttribute('x2','6');l1.setAttribute('y2','18');
+    const l2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    l2.setAttribute('x1','6');l2.setAttribute('y1','6');l2.setAttribute('x2','18');l2.setAttribute('y2','18');
+    svg.append(l1, l2);
+    del.appendChild(svg);
+
+    card.append(toggle, info, del);
+    list.appendChild(card);
+  });
+}
+
+async function toggleServer(name) {
+  await fetch(API + '/api/settings/mcp/' + encodeURIComponent(name) + '/toggle', { method: 'PATCH' });
+  loadServers();
+}
+
+async function deleteServer(name) {
+  await fetch(API + '/api/settings/mcp/' + encodeURIComponent(name), { method: 'DELETE' });
+  loadServers();
+}
+
+function showAddForm() { document.getElementById('addForm').classList.add('active'); }
+function hideAddForm() { document.getElementById('addForm').classList.remove('active'); clearForm(); }
+
+function toggleTypeFields() {
+  const type = document.getElementById('fType').value;
+  document.getElementById('stdioFields').style.display = type === 'stdio' ? 'flex' : 'none';
+  document.getElementById('sseFields').style.display = type === 'sse' ? 'flex' : 'none';
+}
+
+function clearForm() {
+  ['fName','fDesc','fCmd','fArgs','fUrl','fEnv'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+}
+
+async function saveNewMcp() {
+  const name = document.getElementById('fName').value.trim();
+  if (!name) return;
+
+  const type = document.getElementById('fType').value;
+  const envText = document.getElementById('fEnv').value.trim();
+  const env = {};
+  if (envText) {
+    envText.split('\n').forEach(line => {
+      const [k, ...v] = line.split('=');
+      if (k && v.length) env[k.trim()] = v.join('=').trim();
+    });
+  }
+
+  const server = {
+    name,
+    description: document.getElementById('fDesc').value.trim(),
+    type,
+    command: type === 'stdio' ? document.getElementById('fCmd').value.trim() : '',
+    args: type === 'stdio' ? document.getElementById('fArgs').value.split(',').map(s => s.trim()).filter(Boolean) : [],
+    url: type === 'sse' ? document.getElementById('fUrl').value.trim() : '',
+    env,
+    enabled: true,
+  };
+
+  try {
+    const r = await fetch(API + '/api/settings/mcp/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(server),
+    });
+    if (r.ok) { hideAddForm(); loadServers(); }
+    else { const e = await r.json(); alert(e.detail); }
+  } catch (e) { alert('Error saving: ' + e); }
+}
+
+function addPreset(key) {
+  const p = PRESETS[key];
+  if (!p) return;
+  document.getElementById('fName').value = p.name;
+  document.getElementById('fDesc').value = p.description;
+  document.getElementById('fType').value = p.type;
+  document.getElementById('fCmd').value = p.command || '';
+  document.getElementById('fArgs').value = (p.args || []).join(', ');
+  document.getElementById('fUrl').value = p.url || '';
+  const envLines = Object.entries(p.env || {}).map(([k,v]) => k + '=' + v).join('\n');
+  document.getElementById('fEnv').value = envLines;
+  toggleTypeFields();
+  showAddForm();
+}
+
+loadServers();
+</script>
+</body>
+</html>
