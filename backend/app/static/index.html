@@ -218,95 +218,146 @@ body::before{
   font-family:'Share Tech Mono',monospace;letter-spacing:1px;
 }
 
-/* ── Arc Reactor HUD ── */
+/* ── Arc Reactor HUD (Iron Man style) ── */
 .arc-reactor{
   width:200px;height:200px;position:relative;
   display:flex;align-items:center;justify-content:center;
 }
 .arc-reactor-sm{width:50px;height:50px}
 
-.arc-ring{
+/* Outer shell */
+.arc-shell{
+  position:absolute;inset:0;border-radius:50%;
+  background:radial-gradient(circle,rgba(7,60,75,0.3) 60%,rgba(56,76,80,0.5) 100%);
+  border:1px solid rgba(82,254,254,0.15);
+  box-shadow:0 0 30px 5px rgba(82,254,254,0.08);
+}
+
+/* Tunnel ring (bright white-cyan ring) */
+.arc-tunnel{
   position:absolute;border-radius:50%;
-  border:2px solid var(--cyan);
-  opacity:0.3;
+  inset:16px;
+  background:rgba(82,254,254,0.04);
+  box-shadow:0 0 6px 2px rgba(82,254,254,0.3),0 0 6px 3px rgba(82,254,254,0.15) inset;
 }
-.arc-ring-outer{
-  inset:0;
-  border-style:dashed;
-  border-width:2px;
-  animation:arcSpin 20s linear infinite;
+
+/* Core wrapper (dark teal ring) */
+.arc-core-wrap{
+  position:absolute;border-radius:50%;
+  inset:28px;
+  background:rgba(7,60,75,0.7);
+  box-shadow:0 0 8px 3px rgba(82,254,254,0.2),0 0 8px 3px rgba(82,254,254,0.1) inset;
 }
-.arc-ring-middle{
-  inset:14px;
-  border-width:1px;
-  border-color:var(--cyan);
-  opacity:0.5;
-  animation:arcSpin 12s linear infinite reverse;
+
+/* Core outer (glowing white ring) */
+.arc-core-outer{
+  position:absolute;border-radius:50%;
+  inset:45px;
+  background:rgba(255,255,255,0.06);
+  border:1px solid rgba(82,254,254,0.4);
+  box-shadow:0 0 4px 2px rgba(82,254,254,0.25),0 0 15px 8px rgba(82,254,254,0.15) inset;
+  animation:coreGlow 3s ease-in-out infinite;
 }
-.arc-ring-inner{
-  inset:30px;
-  border-width:2px;
-  border-color:var(--cyan);
-  opacity:0.6;
-  animation:arcSpin 8s linear infinite;
+
+/* Core inner (brightest center) */
+.arc-core-inner{
+  position:absolute;border-radius:50%;
+  inset:60px;
+  background:radial-gradient(circle,rgba(82,254,254,0.15),rgba(82,254,254,0.03));
+  border:3px solid rgba(27,78,95,0.6);
+  box-shadow:0 0 10px 6px rgba(82,254,254,0.2),0 0 15px 12px rgba(82,254,254,0.1) inset;
+  animation:coreGlow 3s ease-in-out infinite 0.5s;
 }
-.arc-reactor-sm .arc-ring-outer{border-width:1px}
-.arc-reactor-sm .arc-ring-middle{inset:4px;border-width:1px}
-.arc-reactor-sm .arc-ring-inner{inset:8px;border-width:1px}
+
+@keyframes coreGlow{
+  0%,100%{filter:brightness(0.8);box-shadow:0 0 10px 6px rgba(82,254,254,0.15),0 0 15px 12px rgba(82,254,254,0.08) inset}
+  50%{filter:brightness(1.3);box-shadow:0 0 20px 10px rgba(82,254,254,0.35),0 0 25px 15px rgba(82,254,254,0.2) inset}
+}
+
+/* Coils (8 rotating elements) */
+.arc-coils{
+  position:absolute;inset:0;
+  animation:arcSpin 6s linear infinite;
+}
+.arc-coil{
+  position:absolute;
+  width:22px;height:14px;
+  top:calc(50% - 90px);left:calc(50% - 11px);
+  transform-origin:11px 90px;
+  background:rgba(7,60,75,0.8);
+  box-shadow:0 0 6px rgba(82,254,254,0.4) inset,0 0 3px rgba(82,254,254,0.2);
+  border-radius:2px;
+}
+.arc-coil:nth-child(1){transform:rotate(0deg)}
+.arc-coil:nth-child(2){transform:rotate(45deg)}
+.arc-coil:nth-child(3){transform:rotate(90deg)}
+.arc-coil:nth-child(4){transform:rotate(135deg)}
+.arc-coil:nth-child(5){transform:rotate(180deg)}
+.arc-coil:nth-child(6){transform:rotate(225deg)}
+.arc-coil:nth-child(7){transform:rotate(270deg)}
+.arc-coil:nth-child(8){transform:rotate(315deg)}
+
+/* Tick marks (outer ring markers) */
+.arc-ticks{
+  position:absolute;inset:0;
+  animation:arcSpin 15s linear infinite reverse;
+}
+.arc-tick{
+  position:absolute;
+  width:2px;height:8px;
+  background:rgba(82,254,254,0.35);
+  top:4px;left:calc(50% - 1px);
+  transform-origin:1px calc(100px - 4px);
+  border-radius:1px;
+}
+
+/* Scanning line */
+.arc-scan{
+  position:absolute;inset:0;border-radius:50%;
+  animation:arcSpin 4s linear infinite;
+  overflow:hidden;
+}
+.arc-scan::after{
+  content:'';position:absolute;
+  top:50%;left:50%;width:50%;height:2px;
+  background:linear-gradient(90deg,rgba(82,254,254,0.5),transparent);
+  transform-origin:0 0;
+  box-shadow:0 0 10px 2px rgba(82,254,254,0.15);
+}
 
 @keyframes arcSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 
-/* Segments around the ring */
-.arc-segments{position:absolute;inset:4px;border-radius:50%}
-.arc-seg{
-  position:absolute;
-  width:3px;height:14px;
-  background:var(--cyan);
-  top:0;left:50%;
-  transform-origin:50% calc(50% + 86px);
-  transform:translateX(-50%) rotate(calc(var(--i) * 45deg));
-  opacity:0.4;
-  animation:segPulse 2s ease-in-out infinite;
-  animation-delay:calc(var(--i) * 0.15s);
-  border-radius:1px;
-}
-.arc-reactor-sm .arc-seg{width:2px;height:4px;transform-origin:50% calc(50% + 21px)}
-
-@keyframes segPulse{
-  0%,100%{opacity:0.2;height:14px}
-  50%{opacity:0.8;height:18px}
-}
-
+/* Core text */
 .arc-core{
   font-family:'Orbitron',sans-serif;
-  font-weight:700;font-size:22px;letter-spacing:4px;
-  color:var(--cyan);z-index:1;
-  text-shadow:0 0 20px rgba(0,229,255,0.4);
+  font-weight:700;font-size:18px;letter-spacing:3px;
+  color:rgba(82,254,254,0.9);z-index:2;
+  text-shadow:0 0 15px rgba(82,254,254,0.5),0 0 30px rgba(82,254,254,0.2);
   animation:corePulse 3s ease-in-out infinite;
 }
-.arc-core-sm{font-size:10px;letter-spacing:1px}
+.arc-core-sm{font-size:9px;letter-spacing:1px}
 
 @keyframes corePulse{
-  0%,100%{text-shadow:0 0 10px rgba(0,229,255,0.2);opacity:0.7}
-  50%{text-shadow:0 0 25px rgba(0,229,255,0.6);opacity:1}
+  0%,100%{opacity:0.75;text-shadow:0 0 10px rgba(82,254,254,0.3)}
+  50%{opacity:1;text-shadow:0 0 20px rgba(82,254,254,0.6),0 0 40px rgba(82,254,254,0.2)}
 }
 
-/* Speaking state — reactor glows brighter and spins faster */
-.arc-speaking .arc-ring-outer{
-  animation:arcSpin 3s linear infinite;
-  opacity:0.7;border-color:var(--cyan);
-  box-shadow:0 0 15px rgba(0,229,255,0.2);
-}
-.arc-speaking .arc-ring-middle{
-  animation:arcSpin 2s linear infinite reverse;
-  opacity:0.8;
-}
-.arc-speaking .arc-ring-inner{
-  animation:arcSpin 1.5s linear infinite;
-  opacity:1;box-shadow:inset 0 0 10px rgba(0,229,255,0.15);
-}
-.arc-speaking .arc-seg{animation:segPulse 0.5s ease-in-out infinite}
-.arc-speaking .arc-core{animation:corePulse 1s ease-in-out infinite}
+/* Small reactor (speaking overlay) */
+.arc-reactor-sm .arc-shell{box-shadow:0 0 10px 2px rgba(82,254,254,0.1)}
+.arc-reactor-sm .arc-tunnel{inset:4px}
+.arc-reactor-sm .arc-core-wrap{inset:7px}
+.arc-reactor-sm .arc-core-outer{inset:11px}
+.arc-reactor-sm .arc-core-inner{inset:15px}
+.arc-reactor-sm .arc-coils,.arc-reactor-sm .arc-ticks,.arc-reactor-sm .arc-scan{display:none}
+
+/* Speaking state — everything faster and brighter */
+.arc-speaking .arc-coils{animation-duration:1.5s}
+.arc-speaking .arc-ticks{animation-duration:3s}
+.arc-speaking .arc-scan{animation-duration:1s}
+.arc-speaking .arc-core-outer{animation:coreGlow 0.8s ease-in-out infinite}
+.arc-speaking .arc-core-inner{animation:coreGlow 0.6s ease-in-out infinite}
+.arc-speaking .arc-shell{box-shadow:0 0 40px 10px rgba(82,254,254,0.15)}
+.arc-speaking .arc-core{animation:corePulse 0.8s ease-in-out infinite}
 
 /* ── Bottom Input ── */
 .input-area{
@@ -474,34 +525,45 @@ body::before{
 .hf-close:hover{border-color:var(--red);background:rgba(255,23,68,0.1)}
 .hf-close:hover svg{stroke:var(--red)}
 
-/* State colors */
-.hf-hud[data-state="listening"] .arc-ring{border-color:var(--cyan);opacity:0.4}
-.hf-hud[data-state="listening"] .arc-core{color:var(--cyan)}
-.hf-hud[data-state="listening"] .arc-seg{background:var(--cyan)}
+/* HUD State colors — listening (default cyan) */
 .hf-hud[data-state="listening"] .hf-hud-status{color:var(--cyan)}
 
-.hf-hud[data-state="speech"] .arc-ring{border-color:var(--green);opacity:0.7}
-.hf-hud[data-state="speech"] .arc-ring-outer{animation:arcSpin 4s linear infinite;box-shadow:0 0 25px rgba(0,230,118,0.2)}
-.hf-hud[data-state="speech"] .arc-ring-middle{animation:arcSpin 2.5s linear infinite reverse;box-shadow:0 0 15px rgba(0,230,118,0.15)}
-.hf-hud[data-state="speech"] .arc-ring-inner{animation:arcSpin 1.5s linear infinite;box-shadow:inset 0 0 20px rgba(0,230,118,0.1)}
-.hf-hud[data-state="speech"] .arc-seg{background:var(--green);animation:segPulse 0.4s ease-in-out infinite}
-.hf-hud[data-state="speech"] .arc-core{color:var(--green);text-shadow:0 0 30px rgba(0,230,118,0.5)}
+/* Speech detected — green, everything faster */
+.hf-hud[data-state="speech"] .arc-shell{box-shadow:0 0 40px 10px rgba(0,230,118,0.15)}
+.hf-hud[data-state="speech"] .arc-coils{animation-duration:2s}
+.hf-hud[data-state="speech"] .arc-ticks{animation-duration:5s}
+.hf-hud[data-state="speech"] .arc-scan{animation-duration:2s}
+.hf-hud[data-state="speech"] .arc-core-outer,.hf-hud[data-state="speech"] .arc-core-inner{animation:coreGlowGreen 1s ease-in-out infinite}
+.hf-hud[data-state="speech"] .arc-core{color:rgba(0,230,118,0.9);text-shadow:0 0 20px rgba(0,230,118,0.6)}
+.hf-hud[data-state="speech"] .arc-coil{box-shadow:0 0 8px rgba(0,230,118,0.5) inset,0 0 4px rgba(0,230,118,0.3)}
 .hf-hud[data-state="speech"] .hf-hud-status{color:var(--green)}
+@keyframes coreGlowGreen{
+  0%,100%{filter:brightness(0.9);box-shadow:0 0 10px 6px rgba(0,230,118,0.15),0 0 15px 12px rgba(0,230,118,0.08) inset}
+  50%{filter:brightness(1.4);box-shadow:0 0 25px 12px rgba(0,230,118,0.3),0 0 25px 15px rgba(0,230,118,0.15) inset}
+}
 
-.hf-hud[data-state="processing"] .arc-ring{border-color:var(--amber);opacity:0.6}
-.hf-hud[data-state="processing"] .arc-ring-outer{animation:arcSpin 2s linear infinite;box-shadow:0 0 20px rgba(255,171,0,0.2)}
-.hf-hud[data-state="processing"] .arc-ring-middle{animation:arcSpin 1.5s linear infinite reverse}
-.hf-hud[data-state="processing"] .arc-ring-inner{animation:arcSpin 1s linear infinite}
-.hf-hud[data-state="processing"] .arc-seg{background:var(--amber);animation:segPulse 0.3s ease-in-out infinite}
-.hf-hud[data-state="processing"] .arc-core{color:var(--amber);text-shadow:0 0 30px rgba(255,171,0,0.5)}
+/* Processing — amber, fast spin */
+.hf-hud[data-state="processing"] .arc-shell{box-shadow:0 0 40px 10px rgba(255,171,0,0.12)}
+.hf-hud[data-state="processing"] .arc-coils{animation-duration:1.5s}
+.hf-hud[data-state="processing"] .arc-ticks{animation-duration:3s}
+.hf-hud[data-state="processing"] .arc-scan{animation-duration:1.5s}
+.hf-hud[data-state="processing"] .arc-core-outer,.hf-hud[data-state="processing"] .arc-core-inner{animation:coreGlowAmber 0.8s ease-in-out infinite}
+.hf-hud[data-state="processing"] .arc-core{color:rgba(255,171,0,0.9);text-shadow:0 0 20px rgba(255,171,0,0.6)}
+.hf-hud[data-state="processing"] .arc-coil{box-shadow:0 0 8px rgba(255,171,0,0.5) inset,0 0 4px rgba(255,171,0,0.3)}
 .hf-hud[data-state="processing"] .hf-hud-status{color:var(--amber)}
+@keyframes coreGlowAmber{
+  0%,100%{filter:brightness(0.9);box-shadow:0 0 10px 6px rgba(255,171,0,0.15),0 0 15px 12px rgba(255,171,0,0.08) inset}
+  50%{filter:brightness(1.5);box-shadow:0 0 25px 12px rgba(255,171,0,0.3),0 0 25px 15px rgba(255,171,0,0.15) inset}
+}
 
-.hf-hud[data-state="speaking"] .arc-ring{border-color:var(--cyan);opacity:0.9}
-.hf-hud[data-state="speaking"] .arc-ring-outer{animation:arcSpin 1.5s linear infinite;box-shadow:0 0 35px rgba(0,229,255,0.3)}
-.hf-hud[data-state="speaking"] .arc-ring-middle{animation:arcSpin 1s linear infinite reverse;box-shadow:0 0 25px rgba(0,229,255,0.2)}
-.hf-hud[data-state="speaking"] .arc-ring-inner{animation:arcSpin 0.8s linear infinite;box-shadow:inset 0 0 25px rgba(0,229,255,0.2)}
-.hf-hud[data-state="speaking"] .arc-seg{background:var(--cyan);animation:segPulse 0.25s ease-in-out infinite}
-.hf-hud[data-state="speaking"] .arc-core{color:var(--cyan);animation:corePulse 0.8s ease-in-out infinite;text-shadow:0 0 40px rgba(0,229,255,0.7)}
+/* Speaking — bright cyan, maximum energy */
+.hf-hud[data-state="speaking"] .arc-shell{box-shadow:0 0 60px 15px rgba(82,254,254,0.2)}
+.hf-hud[data-state="speaking"] .arc-coils{animation-duration:1s}
+.hf-hud[data-state="speaking"] .arc-ticks{animation-duration:2s}
+.hf-hud[data-state="speaking"] .arc-scan{animation-duration:0.8s}
+.hf-hud[data-state="speaking"] .arc-core-outer,.hf-hud[data-state="speaking"] .arc-core-inner{animation:coreGlow 0.5s ease-in-out infinite}
+.hf-hud[data-state="speaking"] .arc-core{animation:corePulse 0.6s ease-in-out infinite;text-shadow:0 0 30px rgba(82,254,254,0.8),0 0 60px rgba(82,254,254,0.3)}
+.hf-hud[data-state="speaking"] .arc-coil{box-shadow:0 0 10px rgba(82,254,254,0.6) inset,0 0 6px rgba(82,254,254,0.4)}
 .hf-hud[data-state="speaking"] .hf-hud-status{color:var(--cyan)}
 
 /* Speaking animation overlay */
@@ -653,15 +715,17 @@ body::before{
   <div class="chat-container" id="chatContainer">
     <div class="welcome" id="welcome">
       <div class="arc-reactor" id="arcReactor">
-        <div class="arc-ring arc-ring-outer"></div>
-        <div class="arc-ring arc-ring-middle"></div>
-        <div class="arc-ring arc-ring-inner"></div>
-        <div class="arc-segments">
-          <div class="arc-seg" style="--i:0"></div><div class="arc-seg" style="--i:1"></div>
-          <div class="arc-seg" style="--i:2"></div><div class="arc-seg" style="--i:3"></div>
-          <div class="arc-seg" style="--i:4"></div><div class="arc-seg" style="--i:5"></div>
-          <div class="arc-seg" style="--i:6"></div><div class="arc-seg" style="--i:7"></div>
+        <div class="arc-shell"></div>
+        <div class="arc-tunnel"></div>
+        <div class="arc-core-wrap"></div>
+        <div class="arc-core-outer"></div>
+        <div class="arc-core-inner"></div>
+        <div class="arc-coils">
+          <div class="arc-coil"></div><div class="arc-coil"></div><div class="arc-coil"></div><div class="arc-coil"></div>
+          <div class="arc-coil"></div><div class="arc-coil"></div><div class="arc-coil"></div><div class="arc-coil"></div>
         </div>
+        <div class="arc-ticks"></div>
+        <div class="arc-scan"></div>
         <div class="arc-core">N.O.V.A.</div>
       </div>
       <p>Type or use voice to interact</p>
@@ -812,6 +876,7 @@ function setThemeIcon(theme) {
 // ── Init ──
 document.getElementById('sessionId').textContent = sessionId.toUpperCase();
 initWaveform();
+initArcTicks();
 startClock();
 checkHealth();
 setInterval(checkHealth, 15000);
@@ -1599,6 +1664,20 @@ function hideWelcome() {
 }
 
 // ── Waveform (live from mic analyser) ──
+function initArcTicks() {
+  document.querySelectorAll('.arc-ticks').forEach(container => {
+    if (container.children.length > 0) return;
+    for (let i = 0; i < 36; i++) {
+      const tick = document.createElement('div');
+      tick.className = 'arc-tick';
+      tick.style.transform = 'rotate(' + (i * 10) + 'deg)';
+      // Every 3rd tick is taller
+      if (i % 3 === 0) { tick.style.height = '12px'; tick.style.opacity = '0.5'; }
+      container.appendChild(tick);
+    }
+  });
+}
+
 function initWaveform() {
   const wf = document.getElementById('waveform');
   for (let i = 0; i < 24; i++) {
