@@ -8,13 +8,14 @@ langchain>=0.3.0,<1.0.0
 langchain-google-genai>=2.0.0,<3.0.0
 langchain-community>=0.3.0,<1.0.0
 
-# Google Cloud services
-google-cloud-speech>=2.27.0
-google-cloud-texttospeech>=2.21.0
+# Google Cloud (Calendar, Gmail)
 google-api-python-client>=2.150.0
 google-auth-oauthlib>=1.2.0
 
-# TTS
+# STT (local)
+faster-whisper>=1.0.0
+
+# TTS (Microsoft Edge)
 edge-tts>=6.1.0
 
 # Tools

@@ -1,36 +1,58 @@
+"""
+N.O.V.A. STT — Local speech-to-text using faster-whisper.
+Runs on CPU, no API key needed, supports Spanish and English.
+"""
+
+import io
 import logging
-from google.cloud import speech
+import time
+from faster_whisper import WhisperModel
 
 logger = logging.getLogger(__name__)
+
+# Singleton model — loaded once at startup
+_model: WhisperModel = None
+
+
+def _get_model() -> WhisperModel:
+    global _model
+    if _model is None:
+        logger.info("Loading Whisper model (base)...")
+        t0 = time.time()
+        _model = WhisperModel("small", device="cpu", compute_type="int8")
+        logger.info(f"Whisper model loaded in {time.time()-t0:.1f}s")
+    return _model
+
+
+def load_model():
+    """Pre-load the model at startup."""
+    _get_model()
 
 
 def transcribe_audio(
     audio_bytes: bytes,
-    sample_rate_hertz: int = 16000,
-    language_code: str = "en-US",
-    encoding: speech.RecognitionConfig.AudioEncoding = speech.RecognitionConfig.AudioEncoding.LINEAR16,
+    language_code: str = None,
+    **kwargs,
 ) -> str:
-    """Transcribe audio bytes using Google Cloud Speech-to-Text."""
-    client = speech.SpeechClient()
+    """Transcribe audio bytes using faster-whisper locally."""
+    model = _get_model()
 
-    audio = speech.RecognitionAudio(content=audio_bytes)
-    config = speech.RecognitionConfig(
-        encoding=encoding,
-        sample_rate_hertz=sample_rate_hertz,
-        language_code=language_code,
-        alternative_language_codes=["es-ES"],
-        enable_automatic_punctuation=True,
+    audio_stream = io.BytesIO(audio_bytes)
+
+    t0 = time.time()
+    segments, info = model.transcribe(
+        audio_stream,
+        language=None,  # auto-detect Spanish/English
+        vad_filter=True,  # filter out silence
+        vad_parameters=dict(min_silence_duration_ms=500),
     )
 
-    response = client.recognize(config=config, audio=audio)
+    transcript = " ".join(s.text for s in segments).strip()
+    elapsed = time.time() - t0
 
-    if not response.results:
-        return ""
-
-    transcript = " ".join(
-        result.alternatives[0].transcript
-        for result in response.results
-        if result.alternatives
+    logger.info(
+        f"STT [{info.language}] ({elapsed:.2f}s): {transcript[:80]}..."
+        if transcript else f"STT: no speech detected ({elapsed:.2f}s)"
     )
-    logger.info(f"Transcribed: {transcript}")
+
     return transcript

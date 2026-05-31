@@ -21,10 +21,13 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Jarvis backend starting up...")
+    logger.info("N.O.V.A. backend starting up...")
     from app.agent.orchestrator import build_agent
     app.state.agent_executor = build_agent()
     logger.info("Agent executor ready.")
+    from app.services.stt import load_model
+    load_model()
+    logger.info("Whisper STT ready.")
     yield
     logger.info("Jarvis backend shutting down...")
 
