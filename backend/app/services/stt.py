@@ -19,7 +19,7 @@ def _get_model() -> WhisperModel:
     if _model is None:
         logger.info("Loading Whisper model (base)...")
         t0 = time.time()
-        _model = WhisperModel("small", device="cpu", compute_type="int8")
+        _model = WhisperModel("tiny", device="cpu", compute_type="int8")
         logger.info(f"Whisper model loaded in {time.time()-t0:.1f}s")
     return _model
 
