@@ -230,7 +230,12 @@ body::before{
 .arc-reactor-sm{width:50px;height:50px}
 .arc-reactor-sm svg.reactor-svg{filter:drop-shadow(0 0 8px rgba(0,170,255,0.5))}
 
-/* SVG animation classes */
+/* SVG animation classes — rotate around center of 240x240 viewBox */
+svg.reactor-svg .ring-outer,
+svg.reactor-svg .ring-gears,
+svg.reactor-svg .ring-mid,
+svg.reactor-svg .ring-bars,
+svg.reactor-svg .ring-sweep{transform-origin:120px 120px}
 .ring-outer{animation:svgSpin 20s linear infinite}
 .ring-gears{animation:svgSpin 15s linear infinite}
 .ring-mid{animation:svgSpin 10s linear infinite reverse}
@@ -260,6 +265,7 @@ body::before{
 }
 
 /* Speaking state */
+/* (transform-origin already set above) */
 .arc-speaking .ring-outer{animation-duration:3s}
 .arc-speaking .ring-gears{animation-duration:2s}
 .arc-speaking .ring-bars{animation-duration:1.5s}
