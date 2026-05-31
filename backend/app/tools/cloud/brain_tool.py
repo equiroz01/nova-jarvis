@@ -3,14 +3,16 @@ from app.knowledge.brain import save_note, search_notes, read_note, list_notes, 
 
 
 @tool
-def remember(fact: str, category: str = "facts", related: str = "") -> str:
-    """Save something to your memory/brain. Use this when the user says 'recuerda que...', 'anota que...',
-    or tells you important information you should remember for later.
-    Categories: people, facts, projects, preferences, conversations.
-    Related: comma-separated names of related notes to link with [[links]]."""
+def remember(title: str, fact: str, category: str = "facts", related: str = "") -> str:
+    """Save information to your brain. Use a SHORT title (person name, topic, 2-4 words max).
+    Categories: people, facts, projects, preferences.
+    Related: comma-separated names of related notes to link.
+    Examples:
+      title="Valeria", fact="Hija de Emeldo, 18 años", category="people", related="Emeldo Quiroz"
+      title="Reunion lunes", fact="Reunion con Carlos el lunes a las 10am", category="facts", related="Emeldo Quiroz"
+      title="Prefiere cafe negro", fact="Le gusta el cafe negro sin azucar", category="preferences", related="Emeldo Quiroz"
+    """
     links = [r.strip() for r in related.split(",") if r.strip()] if related else []
-    # Use the fact as title if short, otherwise generate one
-    title = fact[:60] if len(fact) < 80 else fact.split('.')[0][:60]
     return save_note(title=title, content=fact, category=category, links=links)
 
 
