@@ -425,6 +425,85 @@ body::before{
   background:rgba(0,229,255,0.05);
 }
 
+/* ── Hands-Free Fullscreen HUD ── */
+.hf-hud{
+  display:none;position:fixed;inset:0;z-index:50;
+  background:var(--bg-deep);
+  flex-direction:column;align-items:center;justify-content:center;
+  gap:0;
+}
+.hf-hud.active{display:flex}
+
+.hf-hud .arc-reactor{width:280px;height:280px;transition:all 0.5s}
+
+/* HUD status label */
+.hf-hud-status{
+  font-family:'Share Tech Mono',monospace;font-size:12px;
+  letter-spacing:4px;text-transform:uppercase;
+  color:var(--text-muted);margin-top:30px;
+  transition:color 0.3s;
+}
+
+/* HUD transcript (what you said) */
+.hf-hud-transcript{
+  font-family:'Rajdhani',sans-serif;font-size:16px;
+  color:var(--text-secondary);margin-top:12px;
+  max-width:500px;text-align:center;
+  min-height:24px;
+  opacity:0.7;
+}
+
+/* HUD response (what NOVA says) */
+.hf-hud-response{
+  font-family:'Rajdhani',sans-serif;font-size:15px;
+  color:var(--text-primary);margin-top:8px;
+  max-width:600px;text-align:center;
+  min-height:20px;
+  padding:0 20px;
+}
+
+/* Close button */
+.hf-close{
+  position:absolute;top:16px;right:16px;
+  width:36px;height:36px;border-radius:50%;
+  border:1px solid var(--border);background:transparent;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  transition:all 0.3s;z-index:51;
+}
+.hf-close svg{width:16px;height:16px;stroke:var(--text-secondary)}
+.hf-close:hover{border-color:var(--red);background:rgba(255,23,68,0.1)}
+.hf-close:hover svg{stroke:var(--red)}
+
+/* State colors */
+.hf-hud[data-state="listening"] .arc-ring{border-color:var(--cyan);opacity:0.4}
+.hf-hud[data-state="listening"] .arc-core{color:var(--cyan)}
+.hf-hud[data-state="listening"] .arc-seg{background:var(--cyan)}
+.hf-hud[data-state="listening"] .hf-hud-status{color:var(--cyan)}
+
+.hf-hud[data-state="speech"] .arc-ring{border-color:var(--green);opacity:0.7}
+.hf-hud[data-state="speech"] .arc-ring-outer{animation:arcSpin 4s linear infinite;box-shadow:0 0 25px rgba(0,230,118,0.2)}
+.hf-hud[data-state="speech"] .arc-ring-middle{animation:arcSpin 2.5s linear infinite reverse;box-shadow:0 0 15px rgba(0,230,118,0.15)}
+.hf-hud[data-state="speech"] .arc-ring-inner{animation:arcSpin 1.5s linear infinite;box-shadow:inset 0 0 20px rgba(0,230,118,0.1)}
+.hf-hud[data-state="speech"] .arc-seg{background:var(--green);animation:segPulse 0.4s ease-in-out infinite}
+.hf-hud[data-state="speech"] .arc-core{color:var(--green);text-shadow:0 0 30px rgba(0,230,118,0.5)}
+.hf-hud[data-state="speech"] .hf-hud-status{color:var(--green)}
+
+.hf-hud[data-state="processing"] .arc-ring{border-color:var(--amber);opacity:0.6}
+.hf-hud[data-state="processing"] .arc-ring-outer{animation:arcSpin 2s linear infinite;box-shadow:0 0 20px rgba(255,171,0,0.2)}
+.hf-hud[data-state="processing"] .arc-ring-middle{animation:arcSpin 1.5s linear infinite reverse}
+.hf-hud[data-state="processing"] .arc-ring-inner{animation:arcSpin 1s linear infinite}
+.hf-hud[data-state="processing"] .arc-seg{background:var(--amber);animation:segPulse 0.3s ease-in-out infinite}
+.hf-hud[data-state="processing"] .arc-core{color:var(--amber);text-shadow:0 0 30px rgba(255,171,0,0.5)}
+.hf-hud[data-state="processing"] .hf-hud-status{color:var(--amber)}
+
+.hf-hud[data-state="speaking"] .arc-ring{border-color:var(--cyan);opacity:0.9}
+.hf-hud[data-state="speaking"] .arc-ring-outer{animation:arcSpin 1.5s linear infinite;box-shadow:0 0 35px rgba(0,229,255,0.3)}
+.hf-hud[data-state="speaking"] .arc-ring-middle{animation:arcSpin 1s linear infinite reverse;box-shadow:0 0 25px rgba(0,229,255,0.2)}
+.hf-hud[data-state="speaking"] .arc-ring-inner{animation:arcSpin 0.8s linear infinite;box-shadow:inset 0 0 25px rgba(0,229,255,0.2)}
+.hf-hud[data-state="speaking"] .arc-seg{background:var(--cyan);animation:segPulse 0.25s ease-in-out infinite}
+.hf-hud[data-state="speaking"] .arc-core{color:var(--cyan);animation:corePulse 0.8s ease-in-out infinite;text-shadow:0 0 40px rgba(0,229,255,0.7)}
+.hf-hud[data-state="speaking"] .hf-hud-status{color:var(--cyan)}
+
 /* Speaking animation overlay */
 .speaking-overlay{
   position:fixed;bottom:140px;left:50%;transform:translateX(-50%);
@@ -592,6 +671,30 @@ body::before{
       <span class="msg-label">N.O.V.A.</span>
       <div class="typing-dots"><span></span><span></span><span></span></div>
     </div>
+  </div>
+
+  <!-- Hands-Free Fullscreen HUD -->
+  <div class="hf-hud" id="hfHud" data-state="listening">
+    <button class="hf-close" onclick="closeHfHud()">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    </button>
+    <div class="arc-reactor">
+      <div class="arc-ring arc-ring-outer"></div>
+      <div class="arc-ring arc-ring-middle"></div>
+      <div class="arc-ring arc-ring-inner"></div>
+      <div class="arc-segments">
+        <div class="arc-seg" style="--i:0"></div><div class="arc-seg" style="--i:1"></div>
+        <div class="arc-seg" style="--i:2"></div><div class="arc-seg" style="--i:3"></div>
+        <div class="arc-seg" style="--i:4"></div><div class="arc-seg" style="--i:5"></div>
+        <div class="arc-seg" style="--i:6"></div><div class="arc-seg" style="--i:7"></div>
+      </div>
+      <div class="arc-core">N.O.V.A.</div>
+    </div>
+    <div class="hf-hud-status" id="hfHudStatus">LISTENING</div>
+    <div class="hf-hud-transcript" id="hfHudTranscript"></div>
+    <div class="hf-hud-response" id="hfHudResponse"></div>
   </div>
 
   <!-- Speaking overlay -->
@@ -1055,10 +1158,19 @@ let hfSpeechStart = 0;
 
 function toggleHandsfree() {
   if (hfActive) {
-    stopHandsfree();
+    closeHfHud();
   } else {
+    document.getElementById('hfHud').classList.add('active');
+    document.getElementById('hfHudTranscript').textContent = '';
+    document.getElementById('hfHudResponse').textContent = '';
     startHandsfree();
   }
+}
+
+function closeHfHud() {
+  stopHandsfree();
+  document.getElementById('hfHud').classList.remove('active');
+  setInputMode('text');
 }
 
 async function startHandsfree() {
@@ -1204,13 +1316,24 @@ async function hfSendAudio() {
     const data = await r.json();
     hideTyping();
 
-    // Skip empty transcripts silently (no speech detected)
+    // Skip empty transcripts silently
     if (!data.transcript && !data.response) {
-      // Just resume listening
+      // No speech — resume
     } else {
-      if (data.transcript) addMessage(data.transcript, 'user');
-      if (data.response) addMessage(data.response, 'jarvis');
+      // Show in HUD
+      const hudT = document.getElementById('hfHudTranscript');
+      const hudR = document.getElementById('hfHudResponse');
+      if (data.transcript) {
+        addMessage(data.transcript, 'user');
+        if (hudT) hudT.textContent = '"' + data.transcript + '"';
+      }
+      if (data.response) {
+        addMessage(data.response, 'jarvis');
+        if (hudR) hudR.textContent = data.response.replace(/\*\*/g,'').substring(0, 200);
+      }
 
+      // Play audio
+      setHfState('speaking');
       if (data.audio_base64) {
         await playAudioAsync(data.audio_base64);
       } else if (data.response) {
@@ -1279,30 +1402,35 @@ function setHfState(state) {
   const status = document.getElementById('hfStatus');
   const wf = document.getElementById('hfWaveform');
   const btn = document.getElementById('hfToggleBtn');
-  if (!ring) return;
-  ring.className = 'hf-ring';
-  btn.className = 'mic-btn';
-  status.className = 'voice-status';
+  const hud = document.getElementById('hfHud');
+  const hudStatus = document.getElementById('hfHudStatus');
+  if (ring) {
+    ring.className = 'hf-ring';
+    btn.className = 'mic-btn';
+    status.className = 'voice-status';
+  }
+  const labels = { listening: 'LISTENING', speech: 'HEARING YOU', processing: 'PROCESSING', speaking: 'SPEAKING' };
+
   if (state === 'listening') {
-    ring.classList.add('listening');
-    btn.classList.add('recording');
-    status.textContent = 'LISTENING...';
-    wf.classList.add('active');
+    if (ring) { ring.classList.add('listening'); btn.classList.add('recording'); status.textContent = 'LISTENING...'; wf.classList.add('active'); }
+    if (hud) { hud.setAttribute('data-state', 'listening'); }
+    if (hudStatus) { hudStatus.textContent = 'LISTENING'; }
+    const t = document.getElementById('hfHudTranscript');
+    if (t) t.textContent = '';
   } else if (state === 'speech') {
-    ring.classList.add('speech');
-    btn.classList.add('recording');
-    status.textContent = 'HEARING YOU...';
-    status.classList.add('recording');
-    wf.classList.add('active');
+    if (ring) { ring.classList.add('speech'); btn.classList.add('recording'); status.textContent = 'HEARING YOU...'; status.classList.add('recording'); wf.classList.add('active'); }
+    if (hud) { hud.setAttribute('data-state', 'speech'); }
+    if (hudStatus) { hudStatus.textContent = 'HEARING YOU'; }
   } else if (state === 'processing') {
-    ring.classList.add('processing');
-    btn.classList.add('processing');
-    status.textContent = 'PROCESSING...';
-    status.classList.add('processing');
-    wf.classList.remove('active');
+    if (ring) { ring.classList.add('processing'); btn.classList.add('processing'); status.textContent = 'PROCESSING...'; status.classList.add('processing'); wf.classList.remove('active'); }
+    if (hud) { hud.setAttribute('data-state', 'processing'); }
+    if (hudStatus) { hudStatus.textContent = 'PROCESSING'; }
+  } else if (state === 'speaking') {
+    if (hud) { hud.setAttribute('data-state', 'speaking'); }
+    if (hudStatus) { hudStatus.textContent = 'SPEAKING'; }
   } else {
-    wf.classList.remove('active');
-    status.textContent = 'PRESS TO ACTIVATE';
+    if (wf) wf.classList.remove('active');
+    if (status) status.textContent = 'PRESS TO ACTIVATE';
   }
 }
 
