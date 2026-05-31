@@ -16,11 +16,12 @@ MCP_CONFIG_PATH = Path(__file__).parent.parent.parent / "mcp_config.yaml"
 class MCPServer(BaseModel):
     name: str
     description: str = ""
-    type: str = "stdio"  # stdio or sse
+    type: str = "stdio"  # stdio, sse, http
     command: str = ""
     args: list[str] = []
     env: dict[str, str] = {}
-    url: str = ""  # for SSE type
+    url: str = ""  # for SSE/HTTP type
+    headers: dict[str, str] = {}  # for SSE/HTTP auth headers
     enabled: bool = True
 
 
@@ -94,3 +95,18 @@ async def toggle_mcp_server(name: str):
             _save_config(config)
             return {"name": name, "enabled": s["enabled"]}
     raise HTTPException(status_code=404, detail=f"Server '{name}' not found")
+
+
+@router.post("/mcp/reconnect")
+async def reconnect_mcp_servers():
+    """Reconnect all MCP servers after config changes."""
+    from app.mcp_manager import initialize_mcp_servers, get_mcp_status
+    await initialize_mcp_servers()
+    return {"status": "reconnected", "servers": get_mcp_status()}
+
+
+@router.get("/mcp/status")
+async def mcp_status():
+    """Get connection status of all MCP servers."""
+    from app.mcp_manager import get_mcp_status
+    return {"servers": get_mcp_status()}

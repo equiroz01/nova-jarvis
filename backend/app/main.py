@@ -30,6 +30,9 @@ async def lifespan(app: FastAPI):
     from app.services.stt import load_model
     load_model()
     logger.info("Whisper STT ready.")
+    from app.mcp_manager import initialize_mcp_servers
+    await initialize_mcp_servers()
+    logger.info("MCP servers initialized.")
     yield
     logger.info("Jarvis backend shutting down...")
 

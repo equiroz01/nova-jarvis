@@ -161,6 +161,11 @@ select.form-input{cursor:pointer}
     <button class="preset" onclick="addPreset('google-drive')">+ GOOGLE DRIVE</button>
   </div>
 
+  <div style="display:flex;gap:8px;margin-bottom:16px">
+    <button class="btn btn-primary" onclick="reconnectAll()">RECONNECT ALL</button>
+    <span class="form-label" id="mcpStatusLabel" style="align-self:center"></span>
+  </div>
+
   <div class="mcp-list" id="mcpList">
     <div class="empty">NO MCP SERVERS CONFIGURED</div>
   </div>
@@ -176,8 +181,9 @@ select.form-input{cursor:pointer}
       <div class="form-field">
         <span class="form-label">TYPE</span>
         <select class="form-input" id="fType" onchange="toggleTypeFields()">
-          <option value="stdio">STDIO</option>
-          <option value="sse">SSE</option>
+          <option value="stdio">STDIO (local process)</option>
+          <option value="sse">SSE (server-sent events)</option>
+          <option value="http">HTTP (streamable)</option>
         </select>
       </div>
     </div>
@@ -201,6 +207,10 @@ select.form-input{cursor:pointer}
       <div class="form-field">
         <span class="form-label">URL</span>
         <input class="form-input" id="fUrl" placeholder="e.g. http://localhost:3000/sse">
+      </div>
+      <div class="form-field">
+        <span class="form-label">HEADERS (KEY: VALUE, one per line)</span>
+        <textarea class="form-input" id="fHeaders" rows="2" placeholder="Authorization: Bearer xxx"></textarea>
       </div>
     </div>
     <div class="form-row full">
@@ -313,7 +323,40 @@ function hideAddForm() { document.getElementById('addForm').classList.remove('ac
 function toggleTypeFields() {
   const type = document.getElementById('fType').value;
   document.getElementById('stdioFields').style.display = type === 'stdio' ? 'flex' : 'none';
-  document.getElementById('sseFields').style.display = type === 'sse' ? 'flex' : 'none';
+  document.getElementById('sseFields').style.display = (type === 'sse' || type === 'http') ? 'flex' : 'none';
+}
+
+async function reconnectAll() {
+  const label = document.getElementById('mcpStatusLabel');
+  label.textContent = 'RECONNECTING...';
+  label.style.color = '#ffab00';
+  try {
+    const r = await fetch(API + '/api/settings/mcp/reconnect', { method: 'POST' });
+    const data = await r.json();
+    const connected = (data.servers || []).filter(s => s.connected).length;
+    const total = (data.servers || []).length;
+    const tools = (data.servers || []).reduce((a, s) => a + s.tools, 0);
+    label.textContent = connected + '/' + total + ' CONNECTED | ' + tools + ' TOOLS';
+    label.style.color = connected > 0 ? '#00e676' : '#5a7a9a';
+    loadServers();
+  } catch (e) {
+    label.textContent = 'RECONNECT FAILED';
+    label.style.color = '#ff1744';
+  }
+}
+
+async function loadStatus() {
+  try {
+    const r = await fetch(API + '/api/settings/mcp/status');
+    const data = await r.json();
+    const label = document.getElementById('mcpStatusLabel');
+    const servers = data.servers || [];
+    if (servers.length === 0) { label.textContent = ''; return; }
+    const connected = servers.filter(s => s.connected).length;
+    const tools = servers.reduce((a, s) => a + s.tools, 0);
+    label.textContent = connected + '/' + servers.length + ' CONNECTED | ' + tools + ' TOOLS';
+    label.style.color = connected > 0 ? '#00e676' : '#5a7a9a';
+  } catch(e) {}
 }
 
 function clearForm() {
@@ -343,7 +386,8 @@ async function saveNewMcp() {
     type,
     command: type === 'stdio' ? document.getElementById('fCmd').value.trim() : '',
     args: type === 'stdio' ? document.getElementById('fArgs').value.split(',').map(s => s.trim()).filter(Boolean) : [],
-    url: type === 'sse' ? document.getElementById('fUrl').value.trim() : '',
+    url: (type === 'sse' || type === 'http') ? document.getElementById('fUrl').value.trim() : '',
+    headers: {},
     env,
     enabled: true,
   };
@@ -375,6 +419,7 @@ function addPreset(key) {
 }
 
 loadServers();
+loadStatus();
 </script>
 </body>
 </html>

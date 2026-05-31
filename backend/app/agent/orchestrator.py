@@ -52,18 +52,22 @@ def _get_executor() -> AgentExecutor:
     now_minute = datetime.now().strftime("%Y%m%d%H%M")
 
     if _executor is None or _executor_minute != now_minute:
+        from app.mcp_manager import get_mcp_tools
+        mcp_tools = get_mcp_tools()
+        all_tools = ALL_TOOLS + mcp_tools
+
         llm = _get_llm()
         prompt = build_prompt()
-        agent = create_tool_calling_agent(llm=llm, tools=ALL_TOOLS, prompt=prompt)
+        agent = create_tool_calling_agent(llm=llm, tools=all_tools, prompt=prompt)
         _executor = AgentExecutor(
             agent=agent,
-            tools=ALL_TOOLS,
+            tools=all_tools,
             verbose=True,
             handle_parsing_errors=True,
             max_iterations=5,
         )
         _executor_minute = now_minute
-        logger.debug("Executor refreshed")
+        logger.debug(f"Executor refreshed: {len(ALL_TOOLS)} built-in + {len(mcp_tools)} MCP tools")
 
     return _executor
 
