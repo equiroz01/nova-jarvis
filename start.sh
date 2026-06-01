@@ -1,5 +1,5 @@
 #!/bin/bash
-# Jarvis - Quick Start Script
+# N.O.V.A. - Quick Start Script
 
 set -e
 
@@ -8,7 +8,7 @@ BACKEND_DIR="$SCRIPT_DIR/backend"
 ENV_FILE="$SCRIPT_DIR/.env"
 
 echo "========================================="
-echo "  J.A.R.V.I.S. - Starting Up"
+echo "  N.O.V.A. - Starting Up"
 echo "========================================="
 
 # Check .env
@@ -23,29 +23,35 @@ if grep -q "PEGA-TU-KEY-AQUI" "$ENV_FILE" 2>/dev/null; then
   exit 1
 fi
 
+# Kill any existing instance
+pkill -f "uvicorn app.main:app" 2>/dev/null || true
+sleep 1
+
 # Install dependencies if needed
-if ! python3 -c "import fastapi" 2>/dev/null; then
-  echo "Installing backend dependencies..."
+if ! python3.11 -c "import fastapi" 2>/dev/null; then
+  echo "Installing dependencies..."
   pip3 install -r "$BACKEND_DIR/requirements.txt" -q
 fi
 
-# Copy .env to backend dir so uvicorn picks it up
+# Copy .env to backend dir
 cp "$ENV_FILE" "$BACKEND_DIR/.env"
 
 # Export Google Cloud credentials if configured
 GCLOUD_CREDS=$(grep "^GOOGLE_APPLICATION_CREDENTIALS=" "$ENV_FILE" 2>/dev/null | cut -d= -f2-)
 if [ -n "$GCLOUD_CREDS" ] && [ -f "$GCLOUD_CREDS" ]; then
   export GOOGLE_APPLICATION_CREDENTIALS="$GCLOUD_CREDS"
-  echo "Google Cloud credentials loaded"
+  echo "GCP credentials loaded"
 fi
 
-# Start backend
+# Set PYTHONPATH to avoid importing from other projects
+export PYTHONPATH="$BACKEND_DIR"
+
 echo ""
-echo "Starting backend on http://localhost:8080"
-echo "Open http://localhost:8080 in your browser"
+echo "Chat:     http://localhost:8080"
+echo "Settings: http://localhost:8080/settings"
 echo "Press Ctrl+C to stop"
 echo "========================================="
 echo ""
 
 cd "$BACKEND_DIR"
-exec uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
+exec python3.11 -m uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
