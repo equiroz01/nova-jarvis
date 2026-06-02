@@ -819,25 +819,26 @@ async function sendText() {
   showTyping();
 
   try {
-    // Stream response token by token
+    // Stream response with immediate filler processing
     const r = await fetch(API + '/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: msg, session_id: sessionId })
     });
 
-    const reader = r.body.getReader();
-    const decoder = new TextDecoder();
+    const reader = r.body.pipeThrough(new TextDecoderStream()).getReader();
     let streamBubble = null;
     let fullResponse = '';
     let firstToken = true;
+    let buffer = '';
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
 
-      const text = decoder.decode(value, { stream: true });
-      const lines = text.split('\n');
+      buffer += value;
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // keep incomplete line in buffer
 
       for (const line of lines) {
         if (!line.startsWith('data: ')) continue;

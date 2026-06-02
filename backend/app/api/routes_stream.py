@@ -154,10 +154,14 @@ async def chat_stream(request: StreamRequest):
                 yield f"data: {json.dumps({'type': 'done', 'response': cached, 'session_id': request.session_id})}\n\n"
                 return
 
-            # Send filler phrase IMMEDIATELY
+            # Send filler phrase IMMEDIATELY with flush padding
             query_type = _detect_type(request.message)
             filler = _pick_filler(query_type)
-            yield f"data: {json.dumps({'type': 'filler', 'content': filler})}\n\n"
+            # Padding ensures the SSE event flushes through any buffering layers
+            yield f"data: {json.dumps({'type': 'filler', 'content': filler})}\n\n" + " " * 2048 + "\n\n"
+
+            # Small yield to force the event loop to actually send the filler
+            await asyncio.sleep(0)
 
             # Run LLM in thread pool so the filler yield above flushes first
             loop = asyncio.get_event_loop()
