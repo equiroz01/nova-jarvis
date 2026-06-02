@@ -1126,18 +1126,35 @@ function _getGreeting() {
   return bank[Math.floor(Math.random() * bank.length)];
 }
 
+// Pre-cache the greeting audio at page load so it's instant
+let _greetingAudioB64 = null;
+let _greetingText = null;
+(function preloadGreeting() {
+  _greetingText = _getGreeting();
+  fetch(API + '/tts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: _greetingText })
+  }).then(r => r.json()).then(data => {
+    if (data.audio_base64) _greetingAudioB64 = data.audio_base64;
+  }).catch(() => {});
+})();
+
 function speakFiller(queryHint) {
-  // First message of the session → greeting, not a random filler
+  // First message of the session → greeting (pre-cached audio)
   if (isFirstMessage) {
     isFirstMessage = false;
-    const greeting = _getGreeting();
-    fetch(API + '/tts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: greeting })
-    }).then(r => r.json()).then(data => {
-      if (data.audio_base64) playAudio(data.audio_base64);
-    }).catch(() => {});
+    const greeting = _greetingText || _getGreeting();
+    if (_greetingAudioB64) {
+      playAudio(_greetingAudioB64);
+    } else {
+      // Fallback: request TTS on the fly
+      fetch(API + '/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: greeting })
+      }).then(r => r.json()).then(d => { if (d.audio_base64) playAudio(d.audio_base64); }).catch(() => {});
+    }
     return greeting;
   }
 
