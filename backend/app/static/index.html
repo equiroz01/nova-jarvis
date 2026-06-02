@@ -869,8 +869,8 @@ async function sendText() {
             if (firstToken) { hideTyping(); addMessage(data.response, 'jarvis'); }
             fullResponse = data.response;
 
-            // Stop filler TTS, speak real response
-            window.speechSynthesis.cancel();
+            // Stop filler audio, speak real response
+            if (currentAudio) { currentAudio.pause(); currentAudio = null; }
             if (ttsEnabled) {
               fetch(API + '/tts', {
                 method: 'POST',
@@ -1012,7 +1012,7 @@ async function sendVoice(blob) {
     const r = await fetch(API + '/voice', { method: 'POST', body: form });
     const data = await r.json();
     hideTyping();
-    window.speechSynthesis.cancel(); // Stop filler
+    if (currentAudio) { currentAudio.pause(); currentAudio = null; } // Stop filler audio
     if (data.transcript) addMessage(data.transcript, 'user');
     addMessage(data.response, 'jarvis');
     if (data.audio_base64) playAudio(data.audio_base64);
@@ -1108,19 +1108,28 @@ function pickFiller(msg) {
   return pick;
 }
 
-function speakFiller(msg) {
-  const filler = pickFiller(msg);
-  // Always speak filler via browser TTS (instant, even if TTS toggle is off)
-  // This is just a short phrase to fill the wait — not the real response
-  if (!('speechSynthesis' in window)) return filler;
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(filler);
-  utterance.lang = 'es-ES';
-  utterance.rate = 1.1;
-  const voices = window.speechSynthesis.getVoices();
-  const esVoice = voices.find(v => v.lang.startsWith('es')) || voices[0];
-  if (esVoice) utterance.voice = esVoice;
-  window.speechSynthesis.speak(utterance);
+function speakFiller(queryHint) {
+  // Detect type from hint
+  const lower = (queryHint || '').toLowerCase();
+  let qtype = 'general';
+  if (/noticias|news|novedades|titulares/.test(lower)) qtype = 'news';
+  else if (/busca|search|internet/.test(lower)) qtype = 'search';
+  else if (/recuerdas|sabes|conoces|memoria/.test(lower)) qtype = 'memory';
+  else if (/hora|time/.test(lower)) qtype = 'time';
+  else if (/clima|weather/.test(lower)) qtype = 'weather';
+
+  // Request pre-cached Salome audio from backend (instant)
+  const filler = pickFiller(queryHint);
+  fetch(API + '/filler', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query_type: qtype })
+  }).then(r => r.json()).then(data => {
+    if (data.audio_base64) {
+      playAudio(data.audio_base64);
+    }
+  }).catch(() => {});
+
   return filler;
 }
 
@@ -1348,8 +1357,8 @@ async function hfSendAudio() {
     const r = await fetch(API + '/voice', { method: 'POST', body: form });
     const data = await r.json();
 
-    // Stop filler TTS
-    window.speechSynthesis.cancel();
+    // Stop filler audio
+    if (currentAudio) { currentAudio.pause(); currentAudio = null; }
 
     // Skip empty transcripts silently
     if (!data.transcript && !data.response) {

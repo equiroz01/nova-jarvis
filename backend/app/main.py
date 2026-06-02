@@ -33,6 +33,10 @@ async def lifespan(app: FastAPI):
     from app.mcp_manager import initialize_mcp_servers
     await initialize_mcp_servers()
     logger.info("MCP servers initialized.")
+    import asyncio
+    from app.services.filler_cache import preload_fillers
+    asyncio.create_task(preload_fillers())
+    logger.info("Filler phrases caching in background...")
     yield
     logger.info("Jarvis backend shutting down...")
 

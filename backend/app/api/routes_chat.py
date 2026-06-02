@@ -70,3 +70,21 @@ async def tts_endpoint(request: TTSRequest):
     except Exception as e:
         logger.error(f"TTS error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"TTS error: {str(e)}")
+
+
+class FillerRequest(BaseModel):
+    query_type: str = "general"
+
+
+class FillerResponse(BaseModel):
+    text: str
+    audio_base64: str
+
+
+@router.post("/filler", response_model=FillerResponse)
+async def filler_endpoint(request: FillerRequest):
+    """Get a pre-cached filler phrase with Salome audio. Instant response."""
+    from app.services.filler_cache import get_filler
+    text, audio = get_filler(request.query_type)
+    audio_b64 = base64.b64encode(audio).decode("utf-8") if audio else ""
+    return FillerResponse(text=text, audio_base64=audio_b64)
