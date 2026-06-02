@@ -14,11 +14,22 @@ _API_KEY = None
 
 
 def _load_credentials() -> tuple[str, str]:
-    """Load API key and base URL from credentials file."""
+    """Load API key and base URL. Priority: cache → Keychain → credentials file."""
     global _API_KEY
     if _API_KEY:
         return _API_KEY, _BASE_URL
 
+    # Try Keychain first
+    try:
+        from app.services.keychain import keychain
+        kc_key = keychain.get("agilitytask_api_key")
+        if kc_key:
+            _API_KEY = kc_key
+            return _API_KEY, _BASE_URL
+    except Exception:
+        pass
+
+    # Fallback to credentials file
     creds_paths = [
         Path(__file__).parent.parent.parent.parent / ".agilitytask" / "credentials.json",
         Path.home() / ".agilitytask" / "credentials.json",
@@ -30,7 +41,7 @@ def _load_credentials() -> tuple[str, str]:
             base = creds.get("baseUrl", _BASE_URL)
             return _API_KEY, base
 
-    raise RuntimeError("AgilityTask credentials not found. Configure .agilitytask/credentials.json")
+    raise RuntimeError("AgilityTask credentials not found. Use Keychain or .agilitytask/credentials.json")
 
 
 def _api(method: str, path: str, data: dict | None = None) -> dict | list | str:

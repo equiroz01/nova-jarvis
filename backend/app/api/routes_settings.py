@@ -253,3 +253,49 @@ async def agilitytask_delete_credentials():
     except Exception:
         pass
     return {"status": "deleted"}
+
+
+# ── Keychain ──
+
+@router.get("/keychain/list")
+async def keychain_list():
+    """List all secrets in N.O.V.A. Keychain (masked values)."""
+    from app.services.keychain import keychain
+    keys = keychain.list()
+    secrets = []
+    for k in sorted(keys):
+        val = keychain.get(k)
+        masked = val[:4] + "…" + val[-4:] if len(val) > 8 else "****"
+        secrets.append({"key": k, "masked": masked})
+    return {"secrets": secrets, "count": len(secrets)}
+
+
+@router.post("/keychain/set")
+async def keychain_set(key: str = Form(...), value: str = Form(...)):
+    """Store a secret in macOS Keychain."""
+    from app.services.keychain import keychain
+    if not key or not value:
+        raise HTTPException(status_code=400, detail="Key and value are required")
+    ok = keychain.set(key, value)
+    if not ok:
+        raise HTTPException(status_code=500, detail="Failed to store in Keychain")
+    return {"status": "stored", "key": key}
+
+
+@router.delete("/keychain/{key}")
+async def keychain_delete(key: str):
+    """Remove a secret from Keychain."""
+    from app.services.keychain import keychain
+    keychain.delete(key)
+    return {"status": "deleted", "key": key}
+
+
+@router.post("/keychain/import")
+async def keychain_import_all():
+    """Import all secrets from .env, mcp_config.yaml, and AgilityTask into Keychain."""
+    from app.services.keychain import keychain
+    results = {}
+    results.update(keychain.import_from_env())
+    results.update(keychain.import_from_mcp_config())
+    results.update(keychain.import_from_agilitytask())
+    return {"imported": results, "total": sum(1 for v in results.values() if v)}
