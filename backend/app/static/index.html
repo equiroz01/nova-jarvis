@@ -709,6 +709,7 @@ let mediaRecorder = null;
 let audioChunks = [];
 let inputMode = 'text';
 let currentAudio = null;
+let isFirstMessage = true;
 
 // ── TTS Toggle ──
 let ttsEnabled = localStorage.getItem('jarvis-tts') !== 'off';
@@ -1090,7 +1091,28 @@ function pickFiller(msg) {
   return pick;
 }
 
+function _getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Buenos días, Mister Eme.';
+  if (h < 18) return 'Buenas tardes, Mister Eme.';
+  return 'Buenas noches, Mister Eme.';
+}
+
 function speakFiller(queryHint) {
+  // First message of the session → greeting, not a random filler
+  if (isFirstMessage) {
+    isFirstMessage = false;
+    const greeting = _getGreeting();
+    fetch(API + '/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: greeting })
+    }).then(r => r.json()).then(data => {
+      if (data.audio_base64) playAudio(data.audio_base64);
+    }).catch(() => {});
+    return greeting;
+  }
+
   // Detect type from hint
   const lower = (queryHint || '').toLowerCase();
   let qtype = 'general';
@@ -1100,16 +1122,14 @@ function speakFiller(queryHint) {
   else if (/hora|time/.test(lower)) qtype = 'time';
   else if (/clima|weather/.test(lower)) qtype = 'weather';
 
-  // Request pre-cached Salome audio from backend (instant)
+  // Request pre-cached filler audio from backend (instant)
   const filler = pickFiller(queryHint);
   fetch(API + '/filler', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ query_type: qtype })
   }).then(r => r.json()).then(data => {
-    if (data.audio_base64) {
-      playAudio(data.audio_base64);
-    }
+    if (data.audio_base64) playAudio(data.audio_base64);
   }).catch(() => {});
 
   return filler;
