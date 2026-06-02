@@ -1235,11 +1235,15 @@ let hfSpeechDetected = false;
 let hfRAF = null;
 let hfMuted = false; // true while Jarvis is speaking to prevent self-listening
 
-const VAD_SPEECH_THRESHOLD = 25;   // audio level to detect speech
 const VAD_SILENCE_MS = 1500;       // ms of silence to stop recording
 const VAD_MIN_SPEECH_MS = 300;     // minimum speech duration to send
 const VAD_RESUME_DELAY_MS = 800;   // delay after Jarvis stops speaking before listening
+const VAD_MARGIN = 15;             // dB above noise floor to detect speech
+const VAD_CALIBRATION_MS = 2000;   // time to measure ambient noise at start
+const VAD_MIN_THRESHOLD = 20;      // absolute minimum threshold
 let hfSpeechStart = 0;
+let hfNoiseFloor = 20;             // adaptive noise floor (updated continuously)
+let hfCalibrating = false;
 
 function toggleHandsfree() {
   if (hfActive) {
@@ -1285,8 +1289,17 @@ async function startHandsfree() {
     hfSamples = [];
     hfSpeechDetected = false;
     initHfWaveform();
+
+    // Calibrate noise floor before listening
+    hfCalibrating = true;
     setHfState('listening');
-    hfVADLoop();
+    const hudS = document.getElementById('hfHudStatus');
+    if (hudS) hudS.textContent = 'CALIBRATING...';
+    calibrateNoiseFloor(() => {
+      hfCalibrating = false;
+      setHfState('listening');
+      hfVADLoop();
+    });
   } catch (e) {
     console.error('Hands-free mic error:', e);
     addMessage('Microphone access denied. Allow mic access for hands-free mode.', 'jarvis');
@@ -1295,7 +1308,7 @@ async function startHandsfree() {
 }
 
 let _interruptRAF = null;
-const INTERRUPT_THRESHOLD = 40; // Higher than normal VAD to avoid self-hearing
+const INTERRUPT_MARGIN = 25; // Must be louder than normal speech to interrupt (above noise floor)
 
 function hfMute() {
   hfMuted = true;
@@ -1327,7 +1340,7 @@ function startInterruptMonitor() {
     hfAnalyser.getByteFrequencyData(data);
     const level = data.reduce((a, b) => a + b, 0) / data.length;
 
-    if (level > INTERRUPT_THRESHOLD) {
+    if (level > hfNoiseFloor + INTERRUPT_MARGIN) {
       // User is speaking — interrupt N.O.V.A.!
       if (currentAudio) { currentAudio.pause(); currentAudio = null; }
       window.speechSynthesis.cancel();
@@ -1360,12 +1373,49 @@ function stopHandsfree() {
   setHfState('idle');
 }
 
+function calibrateNoiseFloor(callback) {
+  if (!hfAnalyser) { callback(); return; }
+  const samples = [];
+  const start = Date.now();
+  function measure() {
+    if (Date.now() - start > VAD_CALIBRATION_MS) {
+      // Calculate average noise level
+      if (samples.length > 0) {
+        const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
+        hfNoiseFloor = Math.max(VAD_MIN_THRESHOLD, avg);
+      }
+      console.log('Noise floor calibrated:', hfNoiseFloor.toFixed(1), '| Threshold:', (hfNoiseFloor + VAD_MARGIN).toFixed(1));
+      callback();
+      return;
+    }
+    const data = new Uint8Array(hfAnalyser.frequencyBinCount);
+    hfAnalyser.getByteFrequencyData(data);
+    const level = data.reduce((a, b) => a + b, 0) / data.length;
+    samples.push(level);
+    requestAnimationFrame(measure);
+  }
+  measure();
+}
+
+// Slowly adapt noise floor during listening (handles music starting/stopping)
+function updateNoiseFloor(level) {
+  if (hfState === 'listening' && !hfSpeechDetected) {
+    // Smooth adaptation: 95% old + 5% new
+    hfNoiseFloor = hfNoiseFloor * 0.95 + level * 0.05;
+    hfNoiseFloor = Math.max(VAD_MIN_THRESHOLD, hfNoiseFloor);
+  }
+}
+
 function hfVADLoop() {
   if (!hfActive || !hfAnalyser || hfMuted) return;
 
   const data = new Uint8Array(hfAnalyser.frequencyBinCount);
   hfAnalyser.getByteFrequencyData(data);
   const level = data.reduce((a, b) => a + b, 0) / data.length;
+
+  // Adaptive noise floor
+  const threshold = hfNoiseFloor + VAD_MARGIN;
+  updateNoiseFloor(level);
 
   // Update waveform
   const bars = document.getElementById('hfWaveform').querySelectorAll('.waveform-bar');
@@ -1380,15 +1430,15 @@ function hfVADLoop() {
   const now = Date.now();
 
   if (hfState === 'listening') {
-    if (level > VAD_SPEECH_THRESHOLD) {
-      // Speech detected!
+    if (level > threshold) {
+      // Speech detected above noise floor!
       hfSpeechDetected = true;
       hfSpeechStart = now;
       hfSamples = [];
       setHfState('speech');
     }
   } else if (hfState === 'speech') {
-    if (level > VAD_SPEECH_THRESHOLD) {
+    if (level > threshold) {
       hfSilenceStart = 0; // reset silence timer
     } else {
       if (hfSilenceStart === 0) hfSilenceStart = now;
