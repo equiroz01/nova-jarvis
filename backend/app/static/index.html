@@ -1091,11 +1091,39 @@ function pickFiller(msg) {
   return pick;
 }
 
+const GREETINGS = {
+  morning: [
+    "Buenos días, Mister Eme. A sus órdenes.",
+    "Buenos días, jefe. Sistemas en línea, listos para usted.",
+    "Buenos días, Señor Emeldo. ¿En qué le asisto hoy?",
+    "Buen día, Mister Eme. N.O.V.A. operativa y a su disposición.",
+    "Buenos días, jefe. Ya revisé las novedades. Cuando guste.",
+    "Buenos días. Café y datos listos, Mister Eme.",
+    "Buenos días, Señor Emeldo. El día se ve productivo.",
+  ],
+  afternoon: [
+    "Buenas tardes, Mister Eme. ¿Qué necesita?",
+    "Buenas tardes, jefe. Aquí estoy, como siempre.",
+    "Buenas tardes, Señor Emeldo. A la orden.",
+    "Buenas tardes, Mister Eme. N.O.V.A. en línea.",
+    "Buenas tardes, jefe. Dígame en qué le ayudo.",
+    "Buenas tardes. Listo para lo que venga, Mister Eme.",
+    "Buenas tardes, Señor Emeldo. Sistemas operativos.",
+  ],
+  evening: [
+    "Buenas noches, Mister Eme. Aún en pie, como usted.",
+    "Buenas noches, jefe. N.O.V.A. a su servicio.",
+    "Buenas noches, Señor Emeldo. ¿Algo pendiente?",
+    "Buenas noches, Mister Eme. Aquí no descansamos.",
+    "Buenas noches, jefe. Dígame qué necesita.",
+    "Buenas noches. Usted trabaja tarde, yo también. ¿En qué le ayudo?",
+    "Buenas noches, Mister Eme. Todo en orden por aquí.",
+  ],
+};
 function _getGreeting() {
   const h = new Date().getHours();
-  if (h < 12) return 'Buenos días, Mister Eme.';
-  if (h < 18) return 'Buenas tardes, Mister Eme.';
-  return 'Buenas noches, Mister Eme.';
+  const bank = h < 12 ? GREETINGS.morning : h < 18 ? GREETINGS.afternoon : GREETINGS.evening;
+  return bank[Math.floor(Math.random() * bank.length)];
 }
 
 function speakFiller(queryHint) {
