@@ -34,6 +34,8 @@ async def lifespan(app: FastAPI):
     await initialize_mcp_servers()
     logger.info("MCP servers initialized.")
     import asyncio
+    from app.services.voice_id import load_voiceprint
+    load_voiceprint()
     from app.services.filler_cache import preload_fillers
     asyncio.create_task(preload_fillers())
     logger.info("Filler phrases caching in background...")

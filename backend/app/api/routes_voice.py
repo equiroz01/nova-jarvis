@@ -39,6 +39,16 @@ async def voice(
 
     logger.info(f"Received audio: {len(audio_bytes)} bytes")
 
+    # Voice ID — verify speaker
+    from app.services.voice_id import verify, is_enrolled
+    if is_enrolled():
+        is_owner, similarity = verify(audio_bytes)
+        if not is_owner:
+            logger.info(f"Voice rejected (similarity={similarity:.3f})")
+            return VoiceResponse(
+                transcript="", response="", audio_base64="", session_id=session_id,
+            )
+
     # Speech-to-Text
     try:
         transcript = transcribe_audio(audio_bytes, language_code=language)

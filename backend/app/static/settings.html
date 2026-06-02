@@ -150,6 +150,29 @@ select.form-input{cursor:pointer}
 </header>
 
 <div class="content">
+
+  <h2 class="section-title">VOICE ID</h2>
+  <div class="mcp-card" id="voiceIdCard">
+    <div class="mcp-info">
+      <div class="mcp-name" id="voiceIdStatus">Checking...</div>
+      <div class="mcp-desc">N.O.V.A. solo responde a tu voz. Graba 3 muestras para crear tu huella vocal.</div>
+      <div class="mcp-meta" id="voiceIdMeta"></div>
+    </div>
+  </div>
+
+  <div id="enrollSection" style="margin:12px 0 24px">
+    <div class="mcp-desc" style="margin-bottom:8px">
+      Graba 3 frases (5+ segundos cada una). Di algo como:<br>
+      <em>"Buenos días, soy Emeldo Quiroz y esta es mi voz para N.O.V.A."</em>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <button class="btn btn-primary" id="recBtn" onclick="toggleEnrollRec()">GRABAR MUESTRA</button>
+      <span class="form-label" id="recStatus"></span>
+    </div>
+    <div id="samplesList" style="margin-bottom:8px"></div>
+    <button class="btn btn-primary" id="enrollBtn" onclick="submitEnroll()" style="display:none">CREAR VOICEPRINT</button>
+  </div>
+
   <h2 class="section-title">MCP SERVERS</h2>
 
   <div class="presets" id="presets">
@@ -420,6 +443,137 @@ function addPreset(key) {
 
 loadServers();
 loadStatus();
+
+// ── Voice ID ──
+let enrollSamples = [];
+let enrollRecorder = null;
+let enrollStream = null;
+let enrollChunks = [];
+let isEnrollRecording = false;
+
+async function loadVoiceIdStatus() {
+  try {
+    const r = await fetch(API + '/api/settings/voice-id/status');
+    const d = await r.json();
+    const status = document.getElementById('voiceIdStatus');
+    const meta = document.getElementById('voiceIdMeta');
+    if (d.enrolled) {
+      status.textContent = 'VOICEPRINT ACTIVE';
+      status.style.color = '#00e676';
+      meta.textContent = 'N.O.V.A. reconoce tu voz. Puedes re-enrollar si lo necesitas.';
+    } else {
+      status.textContent = 'NO VOICEPRINT';
+      status.style.color = '#ffab00';
+      meta.textContent = 'Graba muestras de tu voz para activar Voice ID.';
+    }
+  } catch(e) {}
+}
+
+function toggleEnrollRec() {
+  if (isEnrollRecording) { stopEnrollRec(); return; }
+  startEnrollRec();
+}
+
+async function startEnrollRec() {
+  try {
+    enrollStream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1 } });
+    enrollRecorder = new MediaRecorder(enrollStream, { mimeType: 'audio/webm' });
+    enrollChunks = [];
+    enrollRecorder.ondataavailable = e => { if (e.data.size > 0) enrollChunks.push(e.data); };
+    enrollRecorder.onstop = () => {
+      enrollStream.getTracks().forEach(t => t.stop());
+      const blob = new Blob(enrollChunks, { type: 'audio/webm' });
+      // Convert to WAV using AudioContext
+      convertToWav(blob).then(wavBlob => {
+        enrollSamples.push(wavBlob);
+        updateSamplesList();
+      });
+    };
+    enrollRecorder.start();
+    isEnrollRecording = true;
+    document.getElementById('recBtn').textContent = 'DETENER';
+    document.getElementById('recBtn').style.borderColor = '#ff1744';
+    document.getElementById('recStatus').textContent = 'Grabando... habla claro por 5+ segundos';
+    document.getElementById('recStatus').style.color = '#ff1744';
+  } catch(e) {
+    document.getElementById('recStatus').textContent = 'Error: permite acceso al micrófono';
+  }
+}
+
+function stopEnrollRec() {
+  if (enrollRecorder && enrollRecorder.state !== 'inactive') enrollRecorder.stop();
+  isEnrollRecording = false;
+  document.getElementById('recBtn').textContent = 'GRABAR MUESTRA';
+  document.getElementById('recBtn').style.borderColor = '';
+  document.getElementById('recStatus').textContent = '';
+}
+
+async function convertToWav(webmBlob) {
+  const arrayBuffer = await webmBlob.arrayBuffer();
+  const audioCtx = new AudioContext({ sampleRate: 16000 });
+  const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+  const channelData = audioBuffer.getChannelData(0);
+  audioCtx.close();
+
+  const int16 = new Int16Array(channelData.length);
+  for (let i = 0; i < channelData.length; i++) {
+    const s = Math.max(-1, Math.min(1, channelData[i]));
+    int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+  }
+  const buffer = new ArrayBuffer(44 + int16.length * 2);
+  const view = new DataView(buffer);
+  function w(off, str) { for (let i = 0; i < str.length; i++) view.setUint8(off + i, str.charCodeAt(i)); }
+  w(0,'RIFF'); view.setUint32(4,36+int16.length*2,true); w(8,'WAVE'); w(12,'fmt ');
+  view.setUint32(16,16,true); view.setUint16(20,1,true); view.setUint16(22,1,true);
+  view.setUint32(24,16000,true); view.setUint32(28,32000,true);
+  view.setUint16(32,2,true); view.setUint16(34,16,true); w(36,'data');
+  view.setUint32(40,int16.length*2,true);
+  new Int16Array(buffer,44).set(int16);
+  return new Blob([buffer], { type: 'audio/wav' });
+}
+
+function updateSamplesList() {
+  const list = document.getElementById('samplesList');
+  list.textContent = '';
+  enrollSamples.forEach((s, i) => {
+    const div = document.createElement('div');
+    div.style.cssText = 'display:flex;align-items:center;gap:8px;margin:4px 0';
+    const label = document.createElement('span');
+    label.className = 'form-label';
+    label.textContent = 'MUESTRA ' + (i+1) + ' (' + (s.size/1024).toFixed(0) + 'KB)';
+    label.style.color = '#00e676';
+    div.appendChild(label);
+    list.appendChild(div);
+  });
+  document.getElementById('enrollBtn').style.display = enrollSamples.length >= 3 ? 'block' : 'none';
+  if (enrollSamples.length < 3) {
+    document.getElementById('recStatus').textContent = (3 - enrollSamples.length) + ' muestra(s) más necesaria(s)';
+    document.getElementById('recStatus').style.color = '#ffab00';
+  }
+}
+
+async function submitEnroll() {
+  document.getElementById('enrollBtn').textContent = 'PROCESANDO...';
+  const form = new FormData();
+  enrollSamples.forEach((s, i) => form.append('samples', s, 'sample' + i + '.wav'));
+  form.append('name', 'Emeldo');
+  try {
+    const r = await fetch(API + '/api/settings/voice-id/enroll', { method: 'POST', body: form });
+    const d = await r.json();
+    if (r.ok) {
+      document.getElementById('enrollBtn').textContent = 'VOICEPRINT CREADO';
+      document.getElementById('enrollBtn').style.borderColor = '#00e676';
+      enrollSamples = [];
+      loadVoiceIdStatus();
+    } else {
+      document.getElementById('enrollBtn').textContent = 'ERROR: ' + (d.detail || 'intenta de nuevo');
+    }
+  } catch(e) {
+    document.getElementById('enrollBtn').textContent = 'ERROR DE CONEXION';
+  }
+}
+
+loadVoiceIdStatus();
 </script>
 </body>
 </html>

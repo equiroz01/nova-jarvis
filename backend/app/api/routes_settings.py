@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 from pydantic import BaseModel
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/settings")
@@ -96,6 +96,32 @@ async def toggle_mcp_server(name: str):
             return {"name": name, "enabled": s["enabled"]}
     raise HTTPException(status_code=404, detail=f"Server '{name}' not found")
 
+
+# ── Voice ID ──
+
+@router.get("/voice-id/status")
+async def voice_id_status():
+    from app.services.voice_id import is_enrolled
+    return {"enrolled": is_enrolled()}
+
+
+@router.post("/voice-id/enroll")
+async def voice_id_enroll(
+    samples: list[UploadFile] = File(...),
+    name: str = Form("Emeldo"),
+):
+    """Enroll voice: upload 3+ WAV samples to create voiceprint."""
+    from app.services.voice_id import enroll
+    audio_list = []
+    for s in samples:
+        audio_list.append(await s.read())
+    result = enroll(audio_list, name=name)
+    if result["status"] == "error":
+        raise HTTPException(status_code=400, detail=result["detail"])
+    return result
+
+
+# ── MCP ──
 
 @router.post("/mcp/reconnect")
 async def reconnect_mcp_servers():
