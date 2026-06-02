@@ -18,3 +18,5 @@ secrets/
 *.json
 nova-brain/
 knowledge_data/
+
+.agilitytask/

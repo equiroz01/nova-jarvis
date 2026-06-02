@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nova.client</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__NOVA_VENV__/bin/python</string>
+        <string>client.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__NOVA_APP__/client</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>JARVIS_BACKEND_URL</key>
+        <string>http://localhost:8080</string>
+        <key>JARVIS_CLIENT_ID</key>
+        <string>mac-studio-01</string>
+        <key>JARVIS_WAKE_WORD</key>
+        <string>jarvis</string>
+        <key>PATH</key>
+        <string>__NOVA_VENV__/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>StandardOutPath</key>
+    <string>__NOVA_HOME__/logs/client.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>__NOVA_HOME__/logs/client.error.log</string>
+</dict>
+</plist>

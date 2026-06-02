@@ -1,5 +1,6 @@
-"""Settings API — manage MCP servers and N.O.V.A. configuration."""
+"""Settings API — manage MCP servers, Voice ID, AgilityTask and N.O.V.A. configuration."""
 
+import json
 import yaml
 import logging
 from pathlib import Path
@@ -136,3 +137,119 @@ async def mcp_status():
     """Get connection status of all MCP servers."""
     from app.mcp_manager import get_mcp_status
     return {"servers": get_mcp_status()}
+
+
+# ── AgilityTask ──
+
+AGILITY_CREDS_PATHS = [
+    Path(__file__).parent.parent.parent.parent / ".agilitytask" / "credentials.json",
+    Path.home() / ".agilitytask" / "credentials.json",
+]
+
+
+def _find_agility_creds() -> Path | None:
+    for p in AGILITY_CREDS_PATHS:
+        if p.exists():
+            return p
+    return None
+
+
+def _load_agility_creds() -> dict:
+    p = _find_agility_creds()
+    if not p:
+        return {}
+    try:
+        return json.loads(p.read_text())
+    except Exception:
+        return {}
+
+
+def _save_agility_creds(data: dict):
+    p = AGILITY_CREDS_PATHS[0]
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(data, indent=2))
+
+
+@router.get("/agilitytask/status")
+async def agilitytask_status():
+    """Check AgilityTask connection status."""
+    import urllib.request
+    import urllib.error
+
+    creds = _load_agility_creds()
+    api_key = creds.get("apiKey", "")
+    email = creds.get("email", "")
+    base_url = creds.get("baseUrl", "https://agilitytask.hnlapps.com")
+
+    if not api_key:
+        return {"configured": False, "connected": False, "email": "", "projects": 0}
+
+    try:
+        req = urllib.request.Request(
+            f"{base_url}/api/v1/projects?limit=1",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode())
+            total = data.get("meta", {}).get("total", 0)
+            return {"configured": True, "connected": True, "email": email, "projects": total}
+    except Exception as e:
+        logger.warning(f"AgilityTask connection check failed: {e}")
+        return {"configured": True, "connected": False, "email": email, "projects": 0}
+
+
+@router.get("/agilitytask/credentials")
+async def agilitytask_get_credentials():
+    """Get AgilityTask credentials (masked API key)."""
+    creds = _load_agility_creds()
+    api_key = creds.get("apiKey", "")
+    masked = api_key[:6] + "…" + api_key[-4:] if len(api_key) > 10 else ""
+    return {
+        "apiKey": masked,
+        "email": creds.get("email", ""),
+        "baseUrl": creds.get("baseUrl", "https://agilitytask.hnlapps.com"),
+    }
+
+
+@router.post("/agilitytask/credentials")
+async def agilitytask_save_credentials(
+    apiKey: str = Form(""),
+    email: str = Form(""),
+    baseUrl: str = Form("https://agilitytask.hnlapps.com"),
+):
+    """Save AgilityTask credentials."""
+    if not apiKey or not email:
+        raise HTTPException(status_code=400, detail="API Key and email are required")
+
+    creds = _load_agility_creds()
+    creds["apiKey"] = apiKey
+    creds["email"] = email
+    creds["baseUrl"] = baseUrl or "https://agilitytask.hnlapps.com"
+    _save_agility_creds(creds)
+
+    # Clear cached API key in tool
+    try:
+        from app.tools.cloud.agilitytask_tool import _load_credentials
+        import app.tools.cloud.agilitytask_tool as at
+        at._API_KEY = None
+    except Exception:
+        pass
+
+    return {"status": "saved"}
+
+
+@router.delete("/agilitytask/credentials")
+async def agilitytask_delete_credentials():
+    """Remove AgilityTask credentials."""
+    p = _find_agility_creds()
+    if p and p.exists():
+        p.unlink()
+    try:
+        import app.tools.cloud.agilitytask_tool as at
+        at._API_KEY = None
+    except Exception:
+        pass
+    return {"status": "deleted"}

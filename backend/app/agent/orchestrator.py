@@ -13,6 +13,10 @@ from app.tools.cloud.calendar_tool import get_upcoming_events, create_calendar_e
 from app.tools.cloud.gmail_tool import search_emails, send_email
 from app.tools.cloud.smart_home_tool import list_smart_devices, control_device
 from app.tools.cloud.brain_tool import remember, recall, read_memory, brain_stats
+from app.tools.cloud.agilitytask_tool import (
+    list_projects, get_project_tasks, get_project_metrics,
+    create_task, update_task, get_team_members,
+)
 from app.tools.local.proxy import take_screenshot, read_screen_text, run_arp_scan
 
 logger = logging.getLogger(__name__)
@@ -23,6 +27,8 @@ CLOUD_TOOLS = [
     search_emails, send_email,
     list_smart_devices, control_device,
     remember, recall, read_memory, brain_stats,
+    list_projects, get_project_tasks, get_project_metrics,
+    create_task, update_task, get_team_members,
 ]
 
 LOCAL_TOOLS = [take_screenshot, read_screen_text, run_arp_scan]

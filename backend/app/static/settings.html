@@ -173,6 +173,45 @@ select.form-input{cursor:pointer}
     <button class="btn btn-primary" id="enrollBtn" onclick="submitEnroll()" style="display:none">CREAR VOICEPRINT</button>
   </div>
 
+  <h2 class="section-title">AGILITYTASK</h2>
+  <div class="mcp-card" id="atCard">
+    <div class="mcp-info">
+      <div class="mcp-name" id="atStatus">Checking...</div>
+      <div class="mcp-desc">Gestión de proyectos y tareas de Hypernova Labs. N.O.V.A. puede listar proyectos, crear tareas, ver métricas y más.</div>
+      <div class="mcp-meta" id="atMeta"></div>
+    </div>
+  </div>
+
+  <div id="atConfigSection" style="margin:12px 0 24px">
+    <div class="add-form active" id="atForm" style="display:none">
+      <div class="form-row">
+        <div class="form-field">
+          <span class="form-label">API KEY</span>
+          <input class="form-input" id="atApiKey" placeholder="agp_xxxx..." type="password">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <span class="form-label">EMAIL</span>
+          <input class="form-input" id="atEmail" placeholder="tu@correo.com" type="email">
+        </div>
+        <div class="form-field">
+          <span class="form-label">BASE URL</span>
+          <input class="form-input" id="atBaseUrl" placeholder="https://agilitytask.hnlapps.com" value="https://agilitytask.hnlapps.com">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn" onclick="atHideForm()">CANCEL</button>
+        <button class="btn btn-primary" onclick="atSave()">SAVE</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn btn-primary" id="atEditBtn" onclick="atShowForm()">CONFIGURE</button>
+      <button class="btn" id="atTestBtn" onclick="atTest()" style="display:none">TEST CONNECTION</button>
+      <button class="btn" id="atRemoveBtn" onclick="atRemove()" style="display:none;border-color:rgba(255,23,68,0.3);color:var(--red)">REMOVE</button>
+    </div>
+  </div>
+
   <h2 class="section-title">MCP SERVERS</h2>
 
   <div class="presets" id="presets">
@@ -574,6 +613,108 @@ async function submitEnroll() {
 }
 
 loadVoiceIdStatus();
+
+// ── AgilityTask ──
+
+async function atLoadStatus() {
+  try {
+    const r = await fetch(API + '/api/settings/agilitytask/status');
+    const d = await r.json();
+    const status = document.getElementById('atStatus');
+    const meta = document.getElementById('atMeta');
+    const testBtn = document.getElementById('atTestBtn');
+    const removeBtn = document.getElementById('atRemoveBtn');
+    const editBtn = document.getElementById('atEditBtn');
+
+    if (d.connected) {
+      status.textContent = 'CONNECTED';
+      status.style.color = '#00e676';
+      meta.textContent = d.email + ' — ' + d.projects + ' proyectos disponibles';
+      testBtn.style.display = 'inline-block';
+      removeBtn.style.display = 'inline-block';
+      editBtn.textContent = 'UPDATE';
+    } else if (d.configured) {
+      status.textContent = 'CONNECTION FAILED';
+      status.style.color = '#ff1744';
+      meta.textContent = d.email ? 'Email: ' + d.email + ' — Verifica tu API key' : 'API key configurada pero no conecta';
+      testBtn.style.display = 'inline-block';
+      removeBtn.style.display = 'inline-block';
+      editBtn.textContent = 'UPDATE';
+    } else {
+      status.textContent = 'NOT CONFIGURED';
+      status.style.color = '#ffab00';
+      meta.textContent = 'Configura tu API key para conectar con AgilityTask.';
+      testBtn.style.display = 'none';
+      removeBtn.style.display = 'none';
+      editBtn.textContent = 'CONFIGURE';
+    }
+  } catch(e) {
+    document.getElementById('atStatus').textContent = 'ERROR';
+    document.getElementById('atStatus').style.color = '#ff1744';
+  }
+}
+
+async function atShowForm() {
+  document.getElementById('atForm').style.display = 'block';
+  try {
+    const r = await fetch(API + '/api/settings/agilitytask/credentials');
+    const d = await r.json();
+    if (d.email) document.getElementById('atEmail').value = d.email;
+    if (d.baseUrl) document.getElementById('atBaseUrl').value = d.baseUrl;
+    document.getElementById('atApiKey').value = '';
+    document.getElementById('atApiKey').placeholder = d.apiKey || 'agp_xxxx...';
+  } catch(e) {}
+}
+
+function atHideForm() {
+  document.getElementById('atForm').style.display = 'none';
+}
+
+async function atSave() {
+  const apiKey = document.getElementById('atApiKey').value.trim();
+  const email = document.getElementById('atEmail').value.trim();
+  const baseUrl = document.getElementById('atBaseUrl').value.trim();
+
+  if (!apiKey || !email) {
+    alert('API Key y email son requeridos');
+    return;
+  }
+
+  const form = new FormData();
+  form.append('apiKey', apiKey);
+  form.append('email', email);
+  form.append('baseUrl', baseUrl || 'https://agilitytask.hnlapps.com');
+
+  try {
+    const r = await fetch(API + '/api/settings/agilitytask/credentials', { method: 'POST', body: form });
+    if (r.ok) {
+      atHideForm();
+      atLoadStatus();
+    } else {
+      const e = await r.json();
+      alert(e.detail || 'Error saving');
+    }
+  } catch(e) { alert('Error: ' + e); }
+}
+
+async function atTest() {
+  const meta = document.getElementById('atMeta');
+  meta.textContent = 'Testing connection...';
+  meta.style.color = '#ffab00';
+  await atLoadStatus();
+}
+
+async function atRemove() {
+  if (!confirm('¿Eliminar credenciales de AgilityTask?')) return;
+  try {
+    await fetch(API + '/api/settings/agilitytask/credentials', { method: 'DELETE' });
+    document.getElementById('atApiKey').value = '';
+    document.getElementById('atEmail').value = '';
+    atLoadStatus();
+  } catch(e) { alert('Error: ' + e); }
+}
+
+atLoadStatus();
 </script>
 </body>
 </html>

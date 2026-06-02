@@ -14,7 +14,14 @@ from difflib import SequenceMatcher
 
 logger = logging.getLogger(__name__)
 
-VAULT_PATH = Path(__file__).parent.parent.parent / "nova-brain"
+def _resolve_vault_path() -> Path:
+    """Resolve vault path: NOVA_HOME/data/nova-brain or default relative path."""
+    nova_home = os.environ.get("NOVA_HOME", "")
+    if nova_home:
+        return Path(nova_home) / "data" / "nova-brain"
+    return Path(__file__).parent.parent.parent / "nova-brain"
+
+VAULT_PATH = _resolve_vault_path()
 
 # Categories map to vault subdirectories
 CATEGORIES = {

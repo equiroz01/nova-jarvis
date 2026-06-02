@@ -1,0 +1,40 @@
+tunnel: __TUNNEL_UUID__
+credentials-file: __HOME__/.cloudflared/__TUNNEL_UUID__.json
+
+ingress:
+  # Alexa skill endpoint (public — Lambda needs unauthenticated access)
+  - hostname: __TUNNEL_HOSTNAME__
+    path: /alexa
+    service: http://localhost:8080
+
+  # Chat API (web UI, external clients)
+  - hostname: __TUNNEL_HOSTNAME__
+    path: /chat
+    service: http://localhost:8080
+
+  # Streaming chat
+  - hostname: __TUNNEL_HOSTNAME__
+    path: /chat/stream
+    service: http://localhost:8080
+
+  # Health check
+  - hostname: __TUNNEL_HOSTNAME__
+    path: /health
+    service: http://localhost:8080
+
+  # Voice endpoint (for remote voice clients)
+  - hostname: __TUNNEL_HOSTNAME__
+    path: /voice
+    service: http://localhost:8080
+
+  # TTS
+  - hostname: __TUNNEL_HOSTNAME__
+    path: /tts
+    service: http://localhost:8080
+
+  # Web UI (static files)
+  - hostname: __TUNNEL_HOSTNAME__
+    service: http://localhost:8080
+
+  # Catch-all: reject everything else
+  - service: http_status:404

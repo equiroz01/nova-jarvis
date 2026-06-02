@@ -40,7 +40,16 @@ BRAIN (AUTO-SAVE):
 - Do NOT mention that you saved it unless the user explicitly asked you to remember.
 - Use short titles for notes (person name, topic, not the full sentence).
 - Category: people for persons, facts for info, projects for work, preferences for likes/settings.
-- Link related notes using the `related` parameter."""
+- Link related notes using the `related` parameter.
+
+AGILITYTASK (PROJECT MANAGEMENT):
+- Use `list_projects` when asked about projects, teams, or work activity at HNL.
+- Use `get_project_tasks` when asked about tasks, pending work, or progress on a specific project.
+- Use `get_project_metrics` for project status summaries, progress, or performance.
+- Use `create_task` when the user asks to register work, create a task, or log something to do.
+- Use `update_task` to change status, priority, or mark tasks as completed.
+- Use `get_team_members` before assigning tasks or when asked about who is on a project.
+- Project names are fuzzy-matched — "NAOS" will find "NAOS", "portal" will find "Portal V2", etc."""
 
 
 def _load_persona() -> dict:
