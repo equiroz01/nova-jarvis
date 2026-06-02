@@ -1000,6 +1000,10 @@ function samplesToWav(chunks, sampleRate) {
 async function sendVoice(blob) {
   hideWelcome();
   showTyping();
+
+  // Speak filler immediately while processing
+  speakFiller('general');
+
   const form = new FormData();
   form.append('audio', blob, 'recording.wav');
   form.append('session_id', sessionId);
@@ -1008,6 +1012,7 @@ async function sendVoice(blob) {
     const r = await fetch(API + '/voice', { method: 'POST', body: form });
     const data = await r.json();
     hideTyping();
+    window.speechSynthesis.cancel(); // Stop filler
     if (data.transcript) addMessage(data.transcript, 'user');
     addMessage(data.response, 'jarvis');
     if (data.audio_base64) playAudio(data.audio_base64);
@@ -1050,6 +1055,63 @@ function playAudio(b64) {
   currentAudio.onended = () => { overlay.classList.remove('active'); URL.revokeObjectURL(url); };
   currentAudio.onerror = () => overlay.classList.remove('active');
   currentAudio.play();
+}
+
+// ── Filler Phrases (muletillas) — client-side for ALL modes ──
+const FILLER_BANK = {
+  general: [
+    "Un momento...", "Déjeme ver...", "Ya le digo, jefe...", "Permítame...",
+    "Ehh, un segundo...", "Ya va...", "Déjeme pensar...", "A ver...",
+    "Mmm, ya le respondo...", "Un segundito...", "Uy, buena pregunta...",
+    "Ya le cuento...", "Listo, déjeme ver...", "Voy a revisar eso...",
+    "Ay, ya voy...", "Qué maravilla, ya le digo...", "Espéreme un momentico...",
+    "Ya casi, un segundo...", "Aja, déjeme mirar...", "Listo, ya voy por eso...",
+  ],
+  search: [
+    "Estoy buscando en internet...", "Déjeme buscar eso...", "Ya reviso, un segundo...",
+    "Consultando fuentes...", "Buscando información...", "Déjeme revisar en la web...",
+    "Ya lo busco...", "Chequeando en internet...", "Ay, ya voy, déjeme buscar...",
+    "Listo, ya estoy buscando...", "Uy, déjeme mirar eso...", "Ya le averiguo...",
+  ],
+  news: [
+    "Revisando las noticias...", "Déjeme ver qué hay de nuevo...",
+    "Buscando las últimas noticias...", "Revisando los titulares...",
+    "A ver qué pasó hoy...", "Consultando las noticias...",
+    "Uy, déjeme ver qué hay...", "Ya miro qué está pasando...",
+    "Voy a revisar las novedades...", "Qué maravilla, ya le cuento qué hay...",
+  ],
+  memory: [
+    "Déjeme revisar mis notas...", "Un momento, reviso lo que sé...",
+    "Verificando en mi memoria...", "Déjeme buscar en mis registros...",
+    "Ya reviso lo que tengo guardado...", "A ver, déjeme recordar...",
+    "Un segundito, ya miro...", "Uy, eso lo tengo por aquí...",
+  ],
+  time: ["Ya verifico...", "Un segundo...", "Déjeme checar...", "Ya miro la hora..."],
+  weather: ["Revisando el clima...", "Déjeme ver el pronóstico...", "Consultando el tiempo...", "Ya miro cómo está el clima..."],
+};
+
+const _recentFillers = [];
+function pickFiller(msg) {
+  const lower = (msg || '').toLowerCase();
+  let cat = 'general';
+  if (/noticias|news|novedades|titulares|pasó|actualidad/.test(lower)) cat = 'news';
+  else if (/busca|search|google|internet|encuentra|averigua/.test(lower)) cat = 'search';
+  else if (/recuerdas|sabes|conoces|quien|quién|memoria/.test(lower)) cat = 'memory';
+  else if (/hora|time|reloj/.test(lower)) cat = 'time';
+  else if (/clima|weather|pronóstico|temperatura|lluvia/.test(lower)) cat = 'weather';
+
+  const bank = FILLER_BANK[cat] || FILLER_BANK.general;
+  const available = bank.filter(f => !_recentFillers.includes(f));
+  const pick = available.length ? available[Math.floor(Math.random() * available.length)] : bank[Math.floor(Math.random() * bank.length)];
+  _recentFillers.push(pick);
+  if (_recentFillers.length > 5) _recentFillers.shift();
+  return pick;
+}
+
+function speakFiller(msg) {
+  const filler = pickFiller(msg);
+  speakText(filler);
+  return filler;
 }
 
 // ── Browser TTS (SpeechSynthesis) ──
@@ -1258,11 +1320,15 @@ async function hfSendAudio() {
   // Mute mic so Jarvis doesn't hear itself
   hfMute();
 
+  // Speak filler IMMEDIATELY while processing
+  const filler = speakFiller('general');
+  const hudStatus = document.getElementById('hfHudResponse');
+  if (hudStatus) hudStatus.textContent = filler;
+
   const wavBlob = samplesToWav(hfSamples, hfContext ? hfContext.sampleRate : 16000);
   hfSamples = [];
 
   hideWelcome();
-  showTyping();
 
   const form = new FormData();
   form.append('audio', wavBlob, 'recording.wav');
@@ -1271,7 +1337,9 @@ async function hfSendAudio() {
   try {
     const r = await fetch(API + '/voice', { method: 'POST', body: form });
     const data = await r.json();
-    hideTyping();
+
+    // Stop filler TTS
+    window.speechSynthesis.cancel();
 
     // Skip empty transcripts silently
     if (!data.transcript && !data.response) {
@@ -1298,7 +1366,6 @@ async function hfSendAudio() {
       }
     }
   } catch (e) {
-    hideTyping();
     console.error('Voice error:', e);
   }
 
