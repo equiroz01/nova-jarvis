@@ -7,7 +7,8 @@ import asyncio
 import logging
 import random
 from pathlib import Path
-from app.services.tts import _synthesize_async, VOICE_ES
+import edge_tts
+from app.services.tts import VOICE_ES, RATE
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +50,13 @@ _recent: list[str] = []
 
 
 async def _generate_one(phrase: str) -> bytes:
-    """Generate TTS audio for a single phrase — slightly faster rate for natural feel."""
-    return await _synthesize_async(phrase, rate="+18%")
+    """Generate TTS audio forcing Salome voice — no language detection."""
+    comm = edge_tts.Communicate(phrase, VOICE_ES, rate="+18%", pitch="+0Hz")
+    chunks = []
+    async for chunk in comm.stream():
+        if chunk["type"] == "audio":
+            chunks.append(chunk["data"])
+    return b"".join(chunks)
 
 
 async def preload_fillers():
