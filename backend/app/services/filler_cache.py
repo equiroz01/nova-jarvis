@@ -49,8 +49,8 @@ _recent: list[str] = []
 
 
 async def _generate_one(phrase: str) -> bytes:
-    """Generate TTS audio for a single phrase."""
-    return await _synthesize_async(phrase)
+    """Generate TTS audio for a single phrase — slightly faster rate for natural feel."""
+    return await _synthesize_async(phrase, rate="+18%")
 
 
 async def preload_fillers():

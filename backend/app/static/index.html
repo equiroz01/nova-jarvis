@@ -816,10 +816,14 @@ async function sendText() {
   input.value = ''; input.style.height = 'auto';
   hideWelcome();
   addMessage(msg, 'user');
-  showTyping();
+
+  // PARALLEL: Fire filler + LLM at the same time
+  const fillerText = speakFiller(msg);
+  const streamBubble = addStreamMessage();
+  updateStreamMessage(streamBubble, fillerText);
 
   try {
-    // Stream response with immediate filler processing
+    // LLM stream starts (filler already playing)
     const r = await fetch(API + '/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -827,9 +831,7 @@ async function sendText() {
     });
 
     const reader = r.body.pipeThrough(new TextDecoderStream()).getReader();
-    let streamBubble = null;
     let fullResponse = '';
-    let firstToken = true;
     let buffer = '';
 
     while (true) {
@@ -838,57 +840,39 @@ async function sendText() {
 
       buffer += value;
       const lines = buffer.split('\n');
-      buffer = lines.pop(); // keep incomplete line in buffer
+      buffer = lines.pop();
 
       for (const line of lines) {
         if (!line.startsWith('data: ')) continue;
         try {
           const data = JSON.parse(line.slice(6));
 
-          // Filler phrase — show and speak immediately while LLM thinks
-          if (data.type === 'filler') {
-            hideTyping();
-            streamBubble = addStreamMessage();
-            updateStreamMessage(streamBubble, data.content);
-            speakText(data.content);
-            firstToken = false;
-          }
+          // Skip backend filler (we already fired our own)
+          if (data.type === 'filler') continue;
 
           // Real response tokens — replace filler with actual content
           if (data.type === 'token') {
-            if (firstToken) {
-              hideTyping();
-              streamBubble = addStreamMessage();
-              firstToken = false;
-            }
             fullResponse += data.content;
             updateStreamMessage(streamBubble, fullResponse);
           }
 
           if (data.type === 'done') {
-            if (firstToken) { hideTyping(); addMessage(data.response, 'jarvis'); }
             fullResponse = data.response;
+            updateStreamMessage(streamBubble, fullResponse);
 
-            // Stop filler audio, speak real response
+            // Stop filler audio, play real response with Salome
             if (currentAudio) { currentAudio.pause(); currentAudio = null; }
-            if (ttsEnabled) {
-              fetch(API + '/tts', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text: fullResponse })
-              }).then(r => r.json()).then(ttsData => {
-                if (ttsData.audio_base64) {
-                  playAudio(ttsData.audio_base64);
-                }
-              }).catch(() => { speakText(fullResponse); });
-            } else {
-              speakText(fullResponse);
-            }
+            fetch(API + '/tts', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: fullResponse })
+            }).then(r => r.json()).then(ttsData => {
+              if (ttsData.audio_base64) playAudio(ttsData.audio_base64);
+            }).catch(() => {});
           }
 
           if (data.type === 'error') {
-            hideTyping();
-            addMessage(data.detail, 'jarvis');
+            updateStreamMessage(streamBubble, data.detail);
           }
         } catch (e) { /* skip malformed lines */ }
       }
@@ -999,9 +983,8 @@ function samplesToWav(chunks, sampleRate) {
 
 async function sendVoice(blob) {
   hideWelcome();
-  showTyping();
 
-  // Speak filler immediately while processing
+  // PARALLEL: filler plays while /voice processes
   speakFiller('general');
 
   const form = new FormData();
@@ -1011,12 +994,11 @@ async function sendVoice(blob) {
   try {
     const r = await fetch(API + '/voice', { method: 'POST', body: form });
     const data = await r.json();
-    hideTyping();
-    if (currentAudio) { currentAudio.pause(); currentAudio = null; } // Stop filler audio
+    // Stop filler
+    if (currentAudio) { currentAudio.pause(); currentAudio = null; }
     if (data.transcript) addMessage(data.transcript, 'user');
-    addMessage(data.response, 'jarvis');
+    if (data.response) addMessage(data.response, 'jarvis');
     if (data.audio_base64) playAudio(data.audio_base64);
-    else speakText(data.response);
     updateMicState('idle');
   } catch (e) {
     hideTyping();
@@ -1335,18 +1317,15 @@ async function hfSendAudio() {
   setHfState('processing');
   hfSpeechDetected = false;
   hfSilenceStart = 0;
-
-  // Mute mic so Jarvis doesn't hear itself
   hfMute();
 
-  // Speak filler IMMEDIATELY while processing
+  // PARALLEL: filler plays while /voice processes
   const filler = speakFiller('general');
-  const hudStatus = document.getElementById('hfHudResponse');
-  if (hudStatus) hudStatus.textContent = filler;
+  const hudR = document.getElementById('hfHudResponse');
+  if (hudR) hudR.textContent = filler;
 
   const wavBlob = samplesToWav(hfSamples, hfContext ? hfContext.sampleRate : 16000);
   hfSamples = [];
-
   hideWelcome();
 
   const form = new FormData();
@@ -1357,16 +1336,13 @@ async function hfSendAudio() {
     const r = await fetch(API + '/voice', { method: 'POST', body: form });
     const data = await r.json();
 
-    // Stop filler audio
+    // Stop filler
     if (currentAudio) { currentAudio.pause(); currentAudio = null; }
 
-    // Skip empty transcripts silently
     if (!data.transcript && !data.response) {
-      // No speech — resume
+      // No speech
     } else {
-      // Show in HUD
       const hudT = document.getElementById('hfHudTranscript');
-      const hudR = document.getElementById('hfHudResponse');
       if (data.transcript) {
         addMessage(data.transcript, 'user');
         if (hudT) hudT.textContent = '"' + data.transcript + '"';
@@ -1376,7 +1352,6 @@ async function hfSendAudio() {
         if (hudR) hudR.textContent = data.response.replace(/\*\*/g,'').substring(0, 200);
       }
 
-      // Play audio
       setHfState('speaking');
       if (data.audio_base64) {
         await playAudioAsync(data.audio_base64);

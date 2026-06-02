@@ -1,6 +1,6 @@
 """
 N.O.V.A. TTS — Microsoft Edge Neural voices via edge-tts.
-Fast, free, no API key needed.
+Fast, free, no API key needed. Salome colombiana.
 """
 
 import re
@@ -10,9 +10,11 @@ import edge_tts
 
 logger = logging.getLogger(__name__)
 
-# N.O.V.A. voice: Salome (Colombian Spanish)
+# N.O.V.A. voice config
 VOICE_ES = "es-CO-SalomeNeural"
 VOICE_EN = "en-US-AvaNeural"
+RATE = "+12%"       # Slightly faster for natural feel
+PITCH = "+0Hz"      # Keep natural pitch
 
 # Spanish detection
 _SPANISH_WORDS = re.compile(
@@ -43,18 +45,19 @@ def _strip_markdown(text: str) -> str:
     return text.strip()
 
 
-async def _synthesize_async(text: str) -> bytes:
+async def _synthesize_async(text: str, rate: str = None) -> bytes:
     clean = _strip_markdown(text)
     voice = VOICE_ES if _is_spanish(clean) else VOICE_EN
+    speak_rate = rate or RATE
 
-    comm = edge_tts.Communicate(clean, voice)
+    comm = edge_tts.Communicate(clean, voice, rate=speak_rate, pitch=PITCH)
     chunks = []
     async for chunk in comm.stream():
         if chunk["type"] == "audio":
             chunks.append(chunk["data"])
 
     audio = b"".join(chunks)
-    logger.info(f"TTS [{voice}]: {len(audio)} bytes")
+    logger.info(f"TTS [{voice} {speak_rate}]: {len(audio)} bytes")
     return audio
 
 
