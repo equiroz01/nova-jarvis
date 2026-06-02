@@ -56,6 +56,19 @@ def _build_persona_block(persona: dict) -> str:
 
     lines = []
 
+    # Identity
+    identity = persona.get("identity", {})
+    if identity:
+        personality_model = identity.get("personality_model", "")
+        if personality_model:
+            lines.append("YOUR IDENTITY AND PERSONALITY:")
+            lines.append(personality_model.strip())
+        examples = identity.get("style_examples", [])
+        if examples:
+            lines.append("\nSTYLE EXAMPLES (mimic this tone):")
+            for ex in examples:
+                lines.append(f'  "{ex}"')
+
     # User info
     user = persona.get("user", {})
     if user:
