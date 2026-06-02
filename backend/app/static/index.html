@@ -1110,7 +1110,17 @@ function pickFiller(msg) {
 
 function speakFiller(msg) {
   const filler = pickFiller(msg);
-  speakText(filler);
+  // Always speak filler via browser TTS (instant, even if TTS toggle is off)
+  // This is just a short phrase to fill the wait — not the real response
+  if (!('speechSynthesis' in window)) return filler;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(filler);
+  utterance.lang = 'es-ES';
+  utterance.rate = 1.1;
+  const voices = window.speechSynthesis.getVoices();
+  const esVoice = voices.find(v => v.lang.startsWith('es')) || voices[0];
+  if (esVoice) utterance.voice = esVoice;
+  window.speechSynthesis.speak(utterance);
   return filler;
 }
 
