@@ -1294,10 +1294,13 @@ async function startHandsfree() {
   }
 }
 
+let _interruptRAF = null;
+const INTERRUPT_THRESHOLD = 40; // Higher than normal VAD to avoid self-hearing
+
 function hfMute() {
   hfMuted = true;
   cancelAnimationFrame(hfRAF);
-  // Disconnect processor so it doesn't buffer Jarvis's voice
+  // Disconnect processor (stop recording) but keep analyser for interrupt detection
   if (hfProcessor && hfSource) {
     try { hfSource.disconnect(hfProcessor); } catch(e) {}
   }
@@ -1308,10 +1311,40 @@ function hfUnmute() {
   hfSamples = [];
   hfSpeechDetected = false;
   hfSilenceStart = 0;
+  cancelAnimationFrame(_interruptRAF);
   // Reconnect processor
   if (hfProcessor && hfSource) {
     try { hfSource.connect(hfProcessor); } catch(e) {}
   }
+}
+
+function startInterruptMonitor() {
+  // Monitor mic levels while N.O.V.A. speaks — if user talks loud, interrupt
+  if (!hfAnalyser || !hfActive) return;
+  function check() {
+    if (!hfActive || hfState !== 'speaking') return;
+    const data = new Uint8Array(hfAnalyser.frequencyBinCount);
+    hfAnalyser.getByteFrequencyData(data);
+    const level = data.reduce((a, b) => a + b, 0) / data.length;
+
+    if (level > INTERRUPT_THRESHOLD) {
+      // User is speaking — interrupt N.O.V.A.!
+      if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+      window.speechSynthesis.cancel();
+      document.getElementById('speakingOverlay').classList.remove('active');
+
+      // Reconnect processor and start recording the interruption
+      hfUnmute();
+      hfSpeechDetected = true;
+      hfSpeechStart = Date.now();
+      hfSamples = [];
+      setHfState('speech');
+      hfVADLoop();
+      return; // Stop monitoring
+    }
+    _interruptRAF = requestAnimationFrame(check);
+  }
+  check();
 }
 
 function stopHandsfree() {
@@ -1418,6 +1451,8 @@ async function hfSendAudio() {
       }
 
       setHfState('speaking');
+      startInterruptMonitor(); // Listen for user interruptions while speaking
+
       if (data.audio_base64) {
         await playAudioAsync(data.audio_base64);
       } else if (data.response) {
@@ -1428,8 +1463,9 @@ async function hfSendAudio() {
     console.error('Voice error:', e);
   }
 
-  // Resume listening after a delay (let speaker audio fade out)
-  if (hfActive && inputMode === 'handsfree') {
+  // Resume listening (only if not already interrupted)
+  cancelAnimationFrame(_interruptRAF);
+  if (hfActive && inputMode === 'handsfree' && hfState !== 'speech') {
     await new Promise(r => setTimeout(r, VAD_RESUME_DELAY_MS));
     hfUnmute();
     setHfState('listening');
