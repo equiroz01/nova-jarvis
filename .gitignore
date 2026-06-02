@@ -20,3 +20,4 @@ nova-brain/
 knowledge_data/
 
 .agilitytask/
+backend/mcp_config.yaml
