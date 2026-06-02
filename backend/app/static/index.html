@@ -844,6 +844,16 @@ async function sendText() {
         try {
           const data = JSON.parse(line.slice(6));
 
+          // Filler phrase — show and speak immediately while LLM thinks
+          if (data.type === 'filler') {
+            hideTyping();
+            streamBubble = addStreamMessage();
+            updateStreamMessage(streamBubble, data.content);
+            speakText(data.content);
+            firstToken = false;
+          }
+
+          // Real response tokens — replace filler with actual content
           if (data.type === 'token') {
             if (firstToken) {
               hideTyping();
@@ -858,8 +868,8 @@ async function sendText() {
             if (firstToken) { hideTyping(); addMessage(data.response, 'jarvis'); }
             fullResponse = data.response;
 
-            // TTS: browser speaks immediately, edge-tts replaces in background
-            speakText(fullResponse);
+            // Stop filler TTS, speak real response
+            window.speechSynthesis.cancel();
             if (ttsEnabled) {
               fetch(API + '/tts', {
                 method: 'POST',
@@ -867,10 +877,11 @@ async function sendText() {
                 body: JSON.stringify({ text: fullResponse })
               }).then(r => r.json()).then(ttsData => {
                 if (ttsData.audio_base64) {
-                  window.speechSynthesis.cancel();
                   playAudio(ttsData.audio_base64);
                 }
-              }).catch(() => {});
+              }).catch(() => { speakText(fullResponse); });
+            } else {
+              speakText(fullResponse);
             }
           }
 
