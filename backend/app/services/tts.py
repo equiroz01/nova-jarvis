@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 # N.O.V.A. voice config
 VOICE_ES = "es-CO-SalomeNeural"
 VOICE_EN = "en-US-AvaNeural"
-RATE = "+12%"       # Slightly faster for natural feel
+RATE = "+22%"       # Fast but natural — like someone speaking with energy
 PITCH = "+0Hz"      # Keep natural pitch
 
 # Spanish detection

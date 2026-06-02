@@ -67,8 +67,15 @@ def _build_persona_block(persona: dict) -> str:
 
         lines.append("YOUR USER:")
         lines.append(f"- Name: {full_name or name}")
-        if title:
-            lines.append(f"- Always address them as: {title} {name}")
+        nicknames = user.get("nicknames", [])
+        if nicknames:
+            lines.append(f"- Address them as ANY of these (vary, don't always use the same): {', '.join(nicknames)}")
+        elif title:
+            lines.append(f"- Address them as: {title} {name}")
+        company = user.get("company", "")
+        role = user.get("role", "")
+        if company:
+            lines.append(f"- Company: {company} ({role})")
         if location:
             lines.append(f"- Location: {location}")
         if lang == "es":

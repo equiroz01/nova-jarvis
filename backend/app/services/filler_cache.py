@@ -51,7 +51,7 @@ _recent: list[str] = []
 
 async def _generate_one(phrase: str) -> bytes:
     """Generate TTS audio forcing Salome voice — no language detection."""
-    comm = edge_tts.Communicate(phrase, VOICE_ES, rate="+18%", pitch="+0Hz")
+    comm = edge_tts.Communicate(phrase, VOICE_ES, rate="+25%", pitch="+0Hz")
     chunks = []
     async for chunk in comm.stream():
         if chunk["type"] == "audio":
