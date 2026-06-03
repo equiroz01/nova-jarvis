@@ -120,6 +120,56 @@ def build_agent() -> str:
     return "ready"
 
 
+_GREETING_WORDS = {"hola", "hello", "hi", "hey", "buenos", "buenas", "good", "buen"}
+
+
+def _is_greeting(message: str) -> bool:
+    words = message.lower().strip().rstrip("!.?,").split()
+    return len(words) <= 4 and any(w in _GREETING_WORDS for w in words)
+
+
+def _prefetch_briefing() -> str:
+    """Fetch calendar, unread emails, and brain in parallel for the greeting briefing."""
+    import concurrent.futures
+
+    def _calendar():
+        try:
+            return get_outlook_events.invoke({"days": 1})
+        except Exception as e:
+            return f"Calendar unavailable: {e}"
+
+    def _emails():
+        try:
+            return get_unread_outlook_emails.invoke({"max_results": 5})
+        except Exception as e:
+            return f"Email unavailable: {e}"
+
+    def _brain():
+        try:
+            return recall.invoke({"query": "pendientes proyectos seguimiento"})
+        except Exception as e:
+            return ""
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+        f_cal = pool.submit(_calendar)
+        f_mail = pool.submit(_emails)
+        f_brain = pool.submit(_brain)
+
+        cal = f_cal.result(timeout=15)
+        mail = f_mail.result(timeout=15)
+        brain = f_brain.result(timeout=5)
+
+    parts = [
+        "BRIEFING DATA (pre-fetched, use this to respond — do NOT call these tools again):",
+        f"\n[CALENDAR]\n{cal}",
+        f"\n[UNREAD EMAILS]\n{mail}",
+    ]
+    if brain and "No relevant" not in brain:
+        parts.append(f"\n[BRAIN MEMORY]\n{brain}")
+
+    return "\n".join(parts)
+
+
 def invoke_agent(message: str, session_id: str, executor=None, retries: int = 2) -> str:
     """Invoke the agent with caching, memory, and retry."""
     # Check cache first
@@ -130,10 +180,19 @@ def invoke_agent(message: str, session_id: str, executor=None, retries: int = 2)
     memory = get_memory(session_id)
     ex = _get_executor()
 
+    # Pre-fetch briefing data only for first greeting (parallel, ~2s instead of ~8s)
+    enriched_message = message
+    if _is_greeting(message) and not memory.chat_memory.messages:
+        logger.info("Greeting detected — pre-fetching briefing data in parallel")
+        t0 = time.time()
+        briefing = _prefetch_briefing()
+        logger.info(f"Briefing pre-fetched in {time.time()-t0:.1f}s")
+        enriched_message = f"{message}\n\n{briefing}"
+
     for attempt in range(retries + 1):
         try:
             response = ex.invoke(
-                {"input": message, "chat_history": memory.chat_memory.messages}
+                {"input": enriched_message, "chat_history": memory.chat_memory.messages}
             )
             output = response["output"]
             memory.chat_memory.add_user_message(message)
