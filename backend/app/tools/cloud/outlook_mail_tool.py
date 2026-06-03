@@ -14,12 +14,11 @@ def search_outlook_emails(query: str, max_results: int = 5) -> str:
     try:
         from app.services.microsoft_auth import graph_request
 
-        # Use $search for natural language, fallback to $filter for structured queries
+        # $search does not support $orderby — Graph returns by relevance
         endpoint = (
             f"me/messages?$search=\"{query}\""
             f"&$top={max_results}"
             f"&$select=subject,from,receivedDateTime,bodyPreview,isRead,webLink"
-            f"&$orderby=receivedDateTime desc"
         )
 
         result = graph_request("GET", endpoint)

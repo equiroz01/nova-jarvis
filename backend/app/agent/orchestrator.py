@@ -122,6 +122,15 @@ def build_agent() -> str:
 
 _GREETING_WORDS = {"hola", "hello", "hi", "hey", "buenos", "buenas", "good", "buen"}
 
+# Briefing cache per session — pre-fetched data available for follow-ups
+_briefing_cache: dict[str, tuple[str, float]] = {}
+_BRIEFING_TTL = 300  # 5 min — after that, fetch fresh
+
+# Words that match pre-fetched data (today's calendar, unread emails)
+_BRIEFING_MATCH = {"hoy", "today", "agenda", "correos", "emails", "reuniones",
+                    "meetings", "pendientes", "calendario", "inbox", "sin leer",
+                    "unread", "bandeja", "schedule", "día", "dia"}
+
 
 def _is_greeting(message: str) -> bool:
     words = message.lower().strip().rstrip("!.?,").split()
@@ -180,14 +189,24 @@ def invoke_agent(message: str, session_id: str, executor=None, retries: int = 2)
     memory = get_memory(session_id)
     ex = _get_executor()
 
-    # Pre-fetch briefing data only for first greeting (parallel, ~2s instead of ~8s)
+    # Pre-fetch briefing on greeting, reuse for follow-ups about the same data
     enriched_message = message
+    msg_words = set(message.lower().strip().rstrip("?!.,").split())
+
     if _is_greeting(message) and not memory.chat_memory.messages:
-        logger.info("Greeting detected — pre-fetching briefing data in parallel")
+        # First greeting — fetch and cache
+        logger.info("Greeting detected — pre-fetching briefing in parallel")
         t0 = time.time()
         briefing = _prefetch_briefing()
+        _briefing_cache[session_id] = (briefing, time.time())
         logger.info(f"Briefing pre-fetched in {time.time()-t0:.1f}s")
         enriched_message = f"{message}\n\n{briefing}"
+    elif session_id in _briefing_cache and msg_words & _BRIEFING_MATCH:
+        cached_data, cached_at = _briefing_cache[session_id]
+        if time.time() - cached_at < _BRIEFING_TTL:
+            # Follow-up about same data — reuse, don't re-call APIs
+            logger.info("Reusing pre-fetched briefing for follow-up")
+            enriched_message = f"{message}\n\nYou already have this data pre-fetched. Use it directly, do NOT call these tools again:\n{cached_data}"
 
     for attempt in range(retries + 1):
         try:
