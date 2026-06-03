@@ -10,7 +10,7 @@ import requests
 import speech_recognition as sr
 
 from config import BACKEND_URL, CLIENT_ID, WAKE_WORD, MIC_INDEX, CONVERSATION_TIMEOUT
-from audio_player import play_audio
+from audio_player import play_audio, is_speaking
 from local_executor import LocalExecutor
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -20,7 +20,8 @@ recognizer = sr.Recognizer()
 recognizer.dynamic_energy_threshold = True
 recognizer.dynamic_energy_adjustment_damping = 0.15
 recognizer.dynamic_energy_ratio = 1.5
-recognizer.pause_threshold = 1.5  # seconds of silence to consider phrase complete
+recognizer.pause_threshold = 0.8  # seconds of silence to consider phrase complete
+recognizer.non_speaking_duration = 0.5
 mic = sr.Microphone(device_index=MIC_INDEX)
 
 
@@ -49,7 +50,7 @@ def send_chat(message: str, session_id: str) -> dict:
 
 def record_audio(source) -> bytes:
     """Record audio from microphone and return WAV bytes."""
-    audio = recognizer.listen(source, timeout=10, phrase_time_limit=15)
+    audio = recognizer.listen(source, timeout=10, phrase_time_limit=20)
     return audio.get_wav_data()
 
 
@@ -72,15 +73,22 @@ def main():
         with mic as source:
             logger.info("Calibrating for ambient noise (3s)...")
             recognizer.adjust_for_ambient_noise(source, duration=3)
-            logger.info(f"Noise floor: energy_threshold={recognizer.energy_threshold:.0f}")
+            # Bump threshold a bit above measured floor to ignore fan noise
+            recognizer.energy_threshold = max(recognizer.energy_threshold * 1.3, 300)
+            logger.info(f"Noise floor set: energy_threshold={recognizer.energy_threshold:.0f}")
             logger.info("Microphone ready. Listening...")
 
             while True:
                 try:
+                    # Skip listening while N.O.V.A. is speaking
+                    if is_speaking.is_set():
+                        time.sleep(0.1)
+                        continue
+
                     if not conversation_mode:
-                        # Wake word detection mode — short phrases only
-                        logger.info("Listening for wake word...")
-                        audio = recognizer.listen(source, timeout=10, phrase_time_limit=3)
+                        # Wake word detection mode
+                        logger.debug("Listening for wake word...")
+                        audio = recognizer.listen(source, timeout=5, phrase_time_limit=4)
                         transcript = recognizer.recognize_google(audio)
                         logger.info(f"Heard: {transcript}")
 
