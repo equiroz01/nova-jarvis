@@ -38,8 +38,15 @@ let hfNoiseFloor = 20;
 let hfCalibrating = false;
 let hfAwake = false;
 const WAKE_WORD = 'nova';
+// Whisper often mishears "Nova" as these in Spanish mode
+const WAKE_VARIANTS = ['nova', 'no va', 'noba', 'no ba', 'noва', 'nová', 'no, va', 'no-va'];
 let _interruptRAF = null;
 const INTERRUPT_MARGIN = 12;
+
+function containsWakeWord(transcript) {
+  const t = transcript.toLowerCase().replace(/[¡!¿?,.:;]/g, '').trim();
+  return WAKE_VARIANTS.some(v => t.includes(v));
+}
 
 function setHfState(state) {
   hfState = state;
@@ -241,7 +248,7 @@ async function hfSendAudio() {
       const data = await r.json();
       const transcript = (data.transcript || '').toLowerCase();
 
-      if (transcript.includes(WAKE_WORD)) {
+      if (containsWakeWord(transcript)) {
         hfAwake = true;
         if (hudS) hudS.textContent = 'ACTIVE';
         console.log('Wake word detected:', transcript);
