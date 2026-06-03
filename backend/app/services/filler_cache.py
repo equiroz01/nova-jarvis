@@ -42,6 +42,18 @@ FILLERS = {
     ],
     "time": ["Ya verifico...", "Un segundo...", "Déjeme checar...", "Ya miro la hora..."],
     "weather": ["Revisando el clima...", "Déjeme ver el pronóstico...", "Consultando el tiempo...", "Ya miro cómo está el clima..."],
+    "interrupt": [
+        "Sí jefe, dígame.",
+        "Claro, le escucho.",
+        "Dígame, Señor Emeldo.",
+        "Sí, a la orden.",
+        "Entendido, ¿qué necesita?",
+        "Sí, Mister Eme.",
+        "Le escucho.",
+        "Cómo no, dígame.",
+        "Aquí estoy, ¿qué le digo?",
+        "Sí señor, lo escucho.",
+    ],
 }
 
 # Cache: phrase -> mp3 bytes

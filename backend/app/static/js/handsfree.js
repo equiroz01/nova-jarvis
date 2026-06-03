@@ -7,7 +7,7 @@ import bus from './eventbus.js';
 import { addMessage, hideWelcome } from './messages.js';
 import { playAudioAsync, stopAudio } from './audio.js';
 import { speakTextAsync } from './tts.js';
-import { speakFiller } from './fillers.js';
+import { speakFiller, speakInterrupt } from './fillers.js';
 import { samplesToWav } from './voice.js';
 import { setInputMode } from './chat.js';
 
@@ -150,6 +150,9 @@ function startInterruptMonitor() {
       interruptHF();
       window.speechSynthesis.cancel();
       document.getElementById('speakingOverlay').classList.remove('active');
+
+      // Play acknowledgment: "Sí jefe, dígame"
+      speakInterrupt();
 
       hfUnmute();
       hfSpeechDetected = true;

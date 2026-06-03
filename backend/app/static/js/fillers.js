@@ -35,6 +35,18 @@ const FILLER_BANK = {
   ],
   time: ["Ya verifico...", "Un segundo, por favor...", "Déjeme checar...", "Ya miro la hora..."],
   weather: ["Revisando el clima...", "Déjeme ver el pronóstico...", "Consultando el tiempo...", "Ya miro cómo está el clima..."],
+  interrupt: [
+    "Sí jefe, dígame.",
+    "Claro, le escucho.",
+    "Dígame, Señor Emeldo.",
+    "Sí, a la orden.",
+    "Entendido, ¿qué necesita?",
+    "Sí, Mister Eme.",
+    "Le escucho.",
+    "Cómo no, dígame.",
+    "Aquí estoy, ¿qué le digo?",
+    "Sí señor, lo escucho.",
+  ],
 };
 
 const GREETINGS = {
@@ -151,6 +163,22 @@ export function speakFiller(queryHint) {
   }).catch(() => {});
 
   return filler;
+}
+
+/**
+ * Play an interrupt acknowledgment filler — "Sí jefe, dígame"
+ * Uses pre-cached audio from backend for instant playback.
+ */
+export function speakInterrupt() {
+  fetch(API + '/filler', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query_type: 'interrupt' })
+  }).then(r => r.json()).then(data => {
+    if (data.audio_base64) playAudio(data.audio_base64, 'response');
+  }).catch(() => {});
+
+  return pickFiller('interrupt');
 }
 
 export function init(config) {
