@@ -255,6 +255,55 @@ async def agilitytask_delete_credentials():
     return {"status": "deleted"}
 
 
+# ── Microsoft 365 ──
+
+@router.get("/microsoft/status")
+async def microsoft_status():
+    """Check Microsoft 365 connection status."""
+    from app.services.keychain import keychain
+
+    client_id = keychain.get("microsoft_client_id")
+    refresh_token = keychain.get("microsoft_refresh_token")
+    tenant_id = keychain.get("microsoft_tenant_id")
+
+    if not client_id or not refresh_token:
+        # Fallback to settings
+        client_id = client_id or getattr(settings, "microsoft_client_id", "") or ""
+        refresh_token = refresh_token or getattr(settings, "microsoft_refresh_token", "") or ""
+
+    if not client_id or not refresh_token:
+        return {"configured": False, "connected": False, "email": "", "name": ""}
+
+    try:
+        from app.services.microsoft_auth import graph_request
+        me = graph_request("GET", "me?$select=displayName,mail,userPrincipalName")
+        return {
+            "configured": True,
+            "connected": True,
+            "email": me.get("mail") or me.get("userPrincipalName", ""),
+            "name": me.get("displayName", ""),
+        }
+    except Exception as e:
+        logger.warning(f"Microsoft 365 status check failed: {e}")
+        return {"configured": True, "connected": False, "email": "", "name": str(e)[:100]}
+
+
+@router.delete("/microsoft/credentials")
+async def microsoft_delete_credentials():
+    """Remove Microsoft 365 credentials from Keychain."""
+    from app.services.keychain import keychain
+    for key in ["microsoft_client_id", "microsoft_client_secret", "microsoft_refresh_token", "microsoft_tenant_id"]:
+        keychain.delete(key)
+    # Clear cached token
+    try:
+        import app.services.microsoft_auth as ma
+        ma._access_token = ""
+        ma._token_expiry = 0
+    except Exception:
+        pass
+    return {"status": "deleted"}
+
+
 # ── Keychain ──
 
 @router.get("/keychain/list")

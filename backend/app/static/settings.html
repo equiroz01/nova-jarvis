@@ -212,6 +212,19 @@ select.form-input{cursor:pointer}
     </div>
   </div>
 
+  <h2 class="section-title">MICROSOFT 365</h2>
+  <div class="mcp-card" id="msCard">
+    <div class="mcp-info">
+      <div class="mcp-name" id="msStatus">Checking...</div>
+      <div class="mcp-desc">Outlook Calendar y Mail. N.O.V.A. puede ver reuniones, buscar correos, enviar emails y agendar eventos.</div>
+      <div class="mcp-meta" id="msMeta"></div>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;margin:8px 0 24px">
+    <button class="btn" id="msTestBtn" onclick="msTest()" style="display:none">TEST CONNECTION</button>
+    <button class="btn" id="msRemoveBtn" onclick="msRemove()" style="display:none;border-color:rgba(255,23,68,0.3);color:var(--red)">REMOVE</button>
+  </div>
+
   <h2 class="section-title">MCP SERVERS</h2>
 
   <div class="presets" id="presets">
@@ -715,6 +728,58 @@ async function atRemove() {
 }
 
 atLoadStatus();
+
+// ── Microsoft 365 ──
+
+async function msLoadStatus() {
+  try {
+    const r = await fetch(API + '/api/settings/microsoft/status');
+    const d = await r.json();
+    const status = document.getElementById('msStatus');
+    const meta = document.getElementById('msMeta');
+    const testBtn = document.getElementById('msTestBtn');
+    const removeBtn = document.getElementById('msRemoveBtn');
+
+    if (d.connected) {
+      status.textContent = 'CONNECTED';
+      status.style.color = '#00e676';
+      meta.textContent = d.name + ' (' + d.email + ') — Outlook Calendar + Mail activos';
+      testBtn.style.display = 'inline-block';
+      removeBtn.style.display = 'inline-block';
+    } else if (d.configured) {
+      status.textContent = 'CONNECTION FAILED';
+      status.style.color = '#ff1744';
+      meta.textContent = d.name || 'Credenciales configuradas pero no conecta. Ejecuta setup_microsoft.py para re-autorizar.';
+      testBtn.style.display = 'inline-block';
+      removeBtn.style.display = 'inline-block';
+    } else {
+      status.textContent = 'NOT CONFIGURED';
+      status.style.color = '#ffab00';
+      meta.textContent = 'Ejecuta: python3.11 backend/setup_microsoft.py para conectar tu Office 365.';
+      testBtn.style.display = 'none';
+      removeBtn.style.display = 'none';
+    }
+  } catch(e) {
+    document.getElementById('msStatus').textContent = 'ERROR';
+    document.getElementById('msStatus').style.color = '#ff1744';
+  }
+}
+
+async function msTest() {
+  document.getElementById('msMeta').textContent = 'Testing connection...';
+  document.getElementById('msMeta').style.color = '#ffab00';
+  await msLoadStatus();
+}
+
+async function msRemove() {
+  if (!confirm('¿Eliminar credenciales de Microsoft 365? Tendrás que re-autorizar con setup_microsoft.py')) return;
+  try {
+    await fetch(API + '/api/settings/microsoft/credentials', { method: 'DELETE' });
+    msLoadStatus();
+  } catch(e) { alert('Error: ' + e); }
+}
+
+msLoadStatus();
 </script>
 </body>
 </html>

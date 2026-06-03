@@ -113,10 +113,19 @@ def get_access_token() -> str:
 def graph_request(method: str, endpoint: str, data: dict = None) -> dict:
     """Make an authenticated request to Microsoft Graph API."""
     token = get_access_token()
-    # Encode spaces and special chars in query params
+    # Encode query params properly — preserve OData operators
     if "?" in endpoint:
         path, qs = endpoint.split("?", 1)
-        url = f"{GRAPH_BASE}/{path}?{urllib.parse.quote(qs, safe='=&$,')}"
+        # Parse params individually to avoid double-encoding
+        encoded_parts = []
+        for part in qs.split("&"):
+            if "=" in part:
+                k, v = part.split("=", 1)
+                safe_chars = "$,/:@!'()*+"
+                encoded_parts.append(f"{k}={urllib.parse.quote(v, safe=safe_chars)}")
+            else:
+                encoded_parts.append(part)
+        url = f"{GRAPH_BASE}/{path}?{'&'.join(encoded_parts)}"
     else:
         url = f"{GRAPH_BASE}/{endpoint}"
 
