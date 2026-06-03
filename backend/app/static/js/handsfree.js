@@ -147,7 +147,7 @@ function startInterruptMonitor() {
     const level = data.reduce((a, b) => a + b, 0) / data.length;
 
     if (level > hfNoiseFloor + INTERRUPT_MARGIN) {
-      stopAudio();
+      interruptHF();
       window.speechSynthesis.cancel();
       document.getElementById('speakingOverlay').classList.remove('active');
 
@@ -251,8 +251,7 @@ async function hfSendAudio() {
 
           setHfState('speaking');
           startInterruptMonitor();
-          if (data.audio_base64) { await playAudioAsync(data.audio_base64, 'response'); }
-          else { await speakTextAsync(data.response); }
+          await playChunkedHF(data.response);
         }
       } else {
         console.log('Not wake word, ignoring:', transcript);
@@ -304,12 +303,7 @@ async function hfSendAudio() {
 
       setHfState('speaking');
       startInterruptMonitor();
-
-      if (data.audio_base64) {
-        await playAudioAsync(data.audio_base64, 'response');
-      } else if (data.response) {
-        await speakTextAsync(data.response);
-      }
+      await playChunkedHF(data.response);
     }
   } catch (e) {
     console.error('Voice error:', e);
@@ -383,6 +377,53 @@ export function stopHandsfree() {
   hfSamples = [];
   hfSpeechDetected = false;
   setHfState('idle');
+}
+
+let _hfTTSAbort = null;
+
+async function playChunkedHF(text) {
+  if (_hfTTSAbort) _hfTTSAbort.abort();
+  _hfTTSAbort = new AbortController();
+  const signal = _hfTTSAbort.signal;
+
+  try {
+    const r = await fetch(API + '/tts/chunked', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+      signal,
+    });
+
+    const reader = r.body.pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = '';
+
+    while (true) {
+      if (signal.aborted) break;
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += value;
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        if (!line.trim() || signal.aborted) continue;
+        try {
+          const chunk = JSON.parse(line);
+          if (chunk.audio_base64) {
+            await playAudioAsync(chunk.audio_base64, 'response');
+          }
+        } catch (e) { /* skip */ }
+      }
+    }
+  } catch (e) {
+    if (e.name !== 'AbortError') console.warn('[hf] chunked TTS error:', e);
+  }
+}
+
+function interruptHF() {
+  if (_hfTTSAbort) _hfTTSAbort.abort();
+  stopAudio();
 }
 
 function toggleHandsfree() {

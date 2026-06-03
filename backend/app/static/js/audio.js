@@ -11,6 +11,8 @@ import { isTTSEnabled } from './theme.js';
 
 let currentAudio = null;
 let currentPriority = 'none'; // 'none' | 'filler' | 'response'
+let _pendingResolve = null; // resolve() for current playAudioAsync Promise
+let _pendingTimer = null;   // safety timeout for current playAudioAsync
 
 function cleanupOverlay() {
   const overlay = document.getElementById('speakingOverlay');
@@ -38,6 +40,9 @@ export function stopAudio(onlyPriority) {
   }
   currentPriority = 'none';
   cleanupOverlay();
+  // Resolve any pending playAudioAsync Promise so the caller unblocks
+  if (_pendingTimer) { clearTimeout(_pendingTimer); _pendingTimer = null; }
+  if (_pendingResolve) { _pendingResolve(); _pendingResolve = null; }
   bus.emit('audio:ended');
 }
 
@@ -119,6 +124,8 @@ export function playAudioAsync(b64, priority) {
   }
 
   return new Promise(resolve => {
+    _pendingResolve = resolve;
+
     const overlay = document.getElementById('speakingOverlay');
     const blob = b64ToBlob(b64);
     const url = URL.createObjectURL(blob);
@@ -126,7 +133,7 @@ export function playAudioAsync(b64, priority) {
     currentPriority = priority;
 
     // Safety timeout — ALWAYS resolve
-    const safetyTimer = setTimeout(() => {
+    _pendingTimer = setTimeout(() => {
       console.warn('[audio] safety timeout reached, forcing resolve');
       if (currentAudio) {
         currentAudio.pause();
@@ -137,12 +144,16 @@ export function playAudioAsync(b64, priority) {
       currentPriority = 'none';
       cleanupOverlay();
       URL.revokeObjectURL(url);
+      _pendingResolve = null;
+      _pendingTimer = null;
       bus.emit('audio:ended');
       resolve();
     }, 60000);
 
     function done() {
-      clearTimeout(safetyTimer);
+      clearTimeout(_pendingTimer);
+      _pendingTimer = null;
+      _pendingResolve = null;
       cleanupOverlay();
       URL.revokeObjectURL(url);
       currentAudio = null;
@@ -159,7 +170,9 @@ export function playAudioAsync(b64, priority) {
 
     currentAudio.play().catch((err) => {
       console.warn('[audio] play() blocked:', err.message);
-      clearTimeout(safetyTimer);
+      clearTimeout(_pendingTimer);
+      _pendingTimer = null;
+      _pendingResolve = null;
       cleanupOverlay();
       currentAudio = null;
       currentPriority = 'none';
