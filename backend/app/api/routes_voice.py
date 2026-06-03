@@ -26,7 +26,7 @@ async def voice(
     req: Request,
     audio: UploadFile = File(...),
     session_id: Optional[str] = Form(None),
-    language: Optional[str] = Form("en-US"),
+    language: Optional[str] = Form("es"),
 ):
     """Process voice input: STT -> Agent -> TTS. Returns text + audio."""
     if session_id is None:
