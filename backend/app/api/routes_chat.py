@@ -1,4 +1,5 @@
 import base64
+import json
 import logging
 import uuid
 from typing import Optional
@@ -88,3 +89,53 @@ async def filler_endpoint(request: FillerRequest):
     text, audio = get_filler(request.query_type)
     audio_b64 = base64.b64encode(audio).decode("utf-8") if audio else ""
     return FillerResponse(text=text, audio_base64=audio_b64)
+
+
+class TTSChunkedRequest(BaseModel):
+    text: str
+
+
+@router.post("/tts/chunked")
+async def tts_chunked(request: TTSChunkedRequest):
+    """Stream TTS chunks as NDJSON — each sentence generates and sends immediately.
+    Client starts playing the first sentence while the rest are still generating."""
+    import re
+    from fastapi.responses import StreamingResponse
+    from app.services.tts import synthesize_speech
+
+    text = request.text.strip()
+    if not text:
+        return StreamingResponse(iter([]), media_type="application/x-ndjson")
+
+    # Split into sentences
+    parts = re.split(r'(?<=[.!?])\s+|(?<=:)\n|\n(?=[-*•\d])', text)
+    sentences = []
+    buf = ""
+    for p in parts:
+        p = p.strip()
+        if not p:
+            continue
+        buf = (buf + " " + p).strip() if buf else p
+        if len(buf) >= 40:
+            sentences.append(buf)
+            buf = ""
+    if buf:
+        sentences.append(buf)
+
+    async def generate():
+        for s in sentences:
+            try:
+                audio = synthesize_speech(s)
+                chunk = {
+                    "text": s,
+                    "audio_base64": base64.b64encode(audio).decode("utf-8"),
+                }
+                yield json.dumps(chunk) + "\n"
+            except Exception as e:
+                logger.warning(f"TTS chunk failed: {e}")
+
+    return StreamingResponse(
+        generate(),
+        media_type="application/x-ndjson",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

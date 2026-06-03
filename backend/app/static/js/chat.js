@@ -1,7 +1,7 @@
 // chat.js — Text input, streaming, input mode switching
 
 import { addMessage, addStreamMessage, updateStreamMessage, hideWelcome, hideTyping } from './messages.js';
-import { playAudio, stopAudio } from './audio.js';
+import { playAudio, playAudioAsync, stopAudio } from './audio.js';
 import { speakFiller } from './fillers.js';
 import { stopRecording, getIsRecording } from './voice.js';
 import { stopHandsfree } from './handsfree.js';
@@ -33,6 +33,7 @@ function autoResize(el) {
 
 function handleTextKey(e) {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText(); }
+  else { interruptTTS(); } // User typing = interrupt N.O.V.A.
   autoResize(e.target);
 }
 
@@ -84,15 +85,9 @@ async function sendText() {
             fullResponse = data.response;
             updateStreamMessage(streamBubble, fullResponse);
 
-            // Stop filler audio, play real response
+            // Stop filler, play response sentence by sentence
             stopAudio('filler');
-            fetch(API + '/tts', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ text: fullResponse })
-            }).then(r => r.json()).then(ttsData => {
-              if (ttsData.audio_base64) playAudio(ttsData.audio_base64, 'response');
-            }).catch(() => {});
+            playChunkedTTS(fullResponse);
           }
 
           if (data.type === 'error') {
@@ -105,6 +100,58 @@ async function sendText() {
     hideTyping();
     addMessage('Connection error. Backend may be offline.', 'jarvis');
   }
+}
+
+let _ttsAbort = null; // AbortController for chunked TTS — allows interruption
+
+async function playChunkedTTS(text) {
+  // Abort any previous chunked TTS
+  if (_ttsAbort) _ttsAbort.abort();
+  _ttsAbort = new AbortController();
+  const signal = _ttsAbort.signal;
+
+  try {
+    const r = await fetch(API + '/tts/chunked', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+      signal,
+    });
+
+    // Read NDJSON stream — each line is a TTS chunk
+    const reader = r.body.pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = '';
+
+    while (true) {
+      if (signal.aborted) break;
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += value;
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // Keep incomplete line in buffer
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        if (signal.aborted) break;
+        try {
+          const chunk = JSON.parse(line);
+          if (chunk.audio_base64) {
+            // Play this sentence and wait for it to finish before next
+            await playAudioAsync(chunk.audio_base64, 'response');
+          }
+        } catch (e) { /* skip malformed lines */ }
+      }
+    }
+  } catch (e) {
+    if (e.name !== 'AbortError') console.warn('[chat] chunked TTS error:', e);
+  }
+}
+
+// Allow interrupting TTS from outside (e.g., user starts typing)
+export function interruptTTS() {
+  if (_ttsAbort) _ttsAbort.abort();
+  stopAudio();
 }
 
 export function init(config) {
