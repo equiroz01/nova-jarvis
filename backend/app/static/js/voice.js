@@ -131,6 +131,7 @@ async function sendVoice(blob) {
   const form = new FormData();
   form.append('audio', blob, 'recording.wav');
   form.append('session_id', sessionId);
+  form.append('language', 'es');
 
   try {
     const r = await fetch(API + '/voice', { method: 'POST', body: form });

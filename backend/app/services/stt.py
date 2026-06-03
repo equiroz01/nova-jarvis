@@ -19,7 +19,7 @@ def _get_model() -> WhisperModel:
     if _model is None:
         logger.info("Loading Whisper model (base)...")
         t0 = time.time()
-        _model = WhisperModel("tiny", device="cpu", compute_type="int8")
+        _model = WhisperModel("base", device="cpu", compute_type="int8")
         logger.info(f"Whisper model loaded in {time.time()-t0:.1f}s")
     return _model
 
@@ -39,19 +39,29 @@ def transcribe_audio(
 
     audio_stream = io.BytesIO(audio_bytes)
 
+    # Force Spanish — user speaks Spanish. Prevents Whisper from
+    # hallucinating Japanese/Russian/English on short noisy audio.
+    lang = "es"
+    if language_code and language_code.startswith("en"):
+        lang = "en"
+
     t0 = time.time()
     segments, info = model.transcribe(
         audio_stream,
-        language=None,  # auto-detect Spanish/English
-        vad_filter=True,  # filter out silence
+        language=lang,
+        vad_filter=True,
         vad_parameters=dict(min_silence_duration_ms=500),
     )
 
     transcript = " ".join(s.text for s in segments).strip()
     elapsed = time.time() - t0
 
+    # Filter out Whisper hallucinations on silence/noise
+    if transcript and len(transcript) < 4 and not any(c.isalpha() for c in transcript):
+        transcript = ""
+
     logger.info(
-        f"STT [{info.language}] ({elapsed:.2f}s): {transcript[:80]}..."
+        f"STT [{lang}] ({elapsed:.2f}s): {transcript[:80]}..."
         if transcript else f"STT: no speech detected ({elapsed:.2f}s)"
     )
 

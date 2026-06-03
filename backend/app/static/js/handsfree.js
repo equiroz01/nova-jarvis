@@ -236,6 +236,7 @@ async function hfSendAudio() {
       const form = new FormData();
       form.append('audio', wavBlob, 'recording.wav');
       form.append('session_id', sessionId);
+      form.append('language', 'es');
       const r = await fetch(API + '/voice', { method: 'POST', body: form });
       const data = await r.json();
       const transcript = (data.transcript || '').toLowerCase();
