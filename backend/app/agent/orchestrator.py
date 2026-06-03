@@ -17,6 +17,8 @@ from app.tools.cloud.agilitytask_tool import (
     list_projects, get_project_tasks, get_project_metrics,
     create_task, update_task, get_team_members,
 )
+from app.tools.cloud.outlook_calendar_tool import get_outlook_events, create_outlook_event
+from app.tools.cloud.outlook_mail_tool import search_outlook_emails, send_outlook_email, get_unread_outlook_emails
 from app.tools.local.proxy import take_screenshot, read_screen_text, run_arp_scan
 
 logger = logging.getLogger(__name__)
@@ -29,6 +31,8 @@ CLOUD_TOOLS = [
     remember, recall, read_memory, brain_stats,
     list_projects, get_project_tasks, get_project_metrics,
     create_task, update_task, get_team_members,
+    get_outlook_events, create_outlook_event,
+    search_outlook_emails, send_outlook_email, get_unread_outlook_emails,
 ]
 
 LOCAL_TOOLS = [take_screenshot, read_screen_text, run_arp_scan]

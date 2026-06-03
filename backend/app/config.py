@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     home_assistant_url: Optional[str] = None
     home_assistant_token: Optional[str] = None
 
+    # Microsoft 365 (Outlook Calendar/Mail)
+    microsoft_client_id: Optional[str] = None
+    microsoft_client_secret: Optional[str] = None
+    microsoft_refresh_token: Optional[str] = None
+    microsoft_tenant_id: Optional[str] = None
+
     # Alexa
     alexa_skill_id: Optional[str] = None
 
