@@ -708,6 +708,11 @@ let isRecording = false;
 let mediaRecorder = null;
 let audioChunks = [];
 let inputMode = 'text';
+
+// Auto-start hands-free mode on page load
+window.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => setInputMode('handsfree'), 500);
+});
 let currentAudio = null;
 let isFirstMessage = true;
 
@@ -1244,6 +1249,8 @@ const VAD_MIN_THRESHOLD = 25;      // absolute minimum threshold
 let hfSpeechStart = 0;
 let hfNoiseFloor = 20;             // adaptive noise floor (updated continuously)
 let hfCalibrating = false;
+let hfAwake = false;               // true after wake word "nova" detected
+const WAKE_WORD = 'nova';
 
 function toggleHandsfree() {
   if (hfActive) {
@@ -1292,12 +1299,14 @@ async function startHandsfree() {
 
     // Calibrate noise floor before listening
     hfCalibrating = true;
+    hfAwake = false;
     setHfState('listening');
     const hudS = document.getElementById('hfHudStatus');
     if (hudS) hudS.textContent = 'CALIBRATING...';
     calibrateNoiseFloor(() => {
       hfCalibrating = false;
       setHfState('listening');
+      if (hudS) hudS.textContent = 'LISTENING — say "NOVA"';
       hfVADLoop();
     });
   } catch (e) {
@@ -1308,7 +1317,7 @@ async function startHandsfree() {
 }
 
 let _interruptRAF = null;
-const INTERRUPT_MARGIN = 25; // Must be louder than normal speech to interrupt (above noise floor)
+const INTERRUPT_MARGIN = 12; // Must be louder than noise floor to interrupt N.O.V.A.
 
 function hfMute() {
   hfMuted = true;
@@ -1467,14 +1476,71 @@ async function hfSendAudio() {
   hfSilenceStart = 0;
   hfMute();
 
-  // PARALLEL: filler plays while /voice processes
-  const filler = speakFiller('general');
-  const hudR = document.getElementById('hfHudResponse');
-  if (hudR) hudR.textContent = filler;
-
   const wavBlob = samplesToWav(hfSamples, hfContext ? hfContext.sampleRate : 16000);
   hfSamples = [];
+  const hudR = document.getElementById('hfHudResponse');
+  const hudT = document.getElementById('hfHudTranscript');
+  const hudS = document.getElementById('hfHudStatus');
+
+  // If not awake, check for wake word first via quick STT
+  if (!hfAwake) {
+    try {
+      const form = new FormData();
+      form.append('audio', wavBlob, 'wake.wav');
+      form.append('session_id', 'wake-check');
+      const r = await fetch(API + '/voice', { method: 'POST', body: form });
+      const data = await r.json();
+      const transcript = (data.transcript || '').toLowerCase();
+
+      if (transcript.includes(WAKE_WORD)) {
+        hfAwake = true;
+        if (hudS) hudS.textContent = 'ACTIVE';
+        console.log('Wake word detected:', transcript);
+
+        // Send the full audio (may contain command after wake word)
+        const form2 = new FormData();
+        form2.append('audio', wavBlob, 'recording.wav');
+        form2.append('session_id', sessionId);
+        const r2 = await fetch(API + '/voice', { method: 'POST', body: form2 });
+        const data2 = await r2.json();
+
+        if (data2.response) {
+          hideWelcome();
+          if (data2.transcript) { addMessage(data2.transcript, 'user'); if (hudT) hudT.textContent = '"' + data2.transcript + '"'; }
+          addMessage(data2.response, 'jarvis');
+          if (hudR) hudR.textContent = data2.response.replace(/\*\*/g,'').substring(0, 200);
+
+          setHfState('speaking');
+          startInterruptMonitor();
+          if (data2.audio_base64) { await playAudioAsync(data2.audio_base64); }
+          else { await speakTextAsync(data2.response); }
+        }
+      } else {
+        // Not wake word — ignore
+        console.log('Not wake word, ignoring:', transcript);
+      }
+    } catch (e) {
+      console.error('Wake check error:', e);
+    }
+
+    // Resume listening
+    cancelAnimationFrame(_interruptRAF);
+    if (hfActive && inputMode === 'handsfree' && hfState !== 'speech') {
+      await new Promise(r => setTimeout(r, VAD_RESUME_DELAY_MS));
+      hfUnmute();
+      setHfState('listening');
+      if (!hfAwake && hudS) hudS.textContent = 'LISTENING — say "NOVA"';
+      hfVADLoop();
+    }
+    return;
+  }
+
+  // ── Already awake — process command normally ──
   hideWelcome();
+
+  // PARALLEL: filler plays while /voice processes
+  const filler = speakFiller('general');
+  if (hudR) hudR.textContent = filler;
 
   const form = new FormData();
   form.append('audio', wavBlob, 'recording.wav');
@@ -1490,7 +1556,6 @@ async function hfSendAudio() {
     if (!data.transcript && !data.response) {
       // No speech
     } else {
-      const hudT = document.getElementById('hfHudTranscript');
       if (data.transcript) {
         addMessage(data.transcript, 'user');
         if (hudT) hudT.textContent = '"' + data.transcript + '"';
@@ -1501,7 +1566,7 @@ async function hfSendAudio() {
       }
 
       setHfState('speaking');
-      startInterruptMonitor(); // Listen for user interruptions while speaking
+      startInterruptMonitor();
 
       if (data.audio_base64) {
         await playAudioAsync(data.audio_base64);
