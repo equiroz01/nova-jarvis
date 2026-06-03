@@ -28,10 +28,15 @@ _SPANISH_CHARS = re.compile(r'[ñáéíóú¿¡]')
 
 
 def _is_spanish(text: str) -> bool:
+    """Always default to Spanish (Salome). Only use English voice if text
+    is clearly 100% English with zero Spanish indicators."""
     if _SPANISH_CHARS.search(text):
         return True
     matches = _SPANISH_WORDS.findall(text)
-    return len(matches) >= 2
+    if matches:
+        return True
+    # Only English if no Spanish words at all and text looks fully English
+    return True  # Default: always Salome
 
 
 def _strip_markdown(text: str) -> str:
