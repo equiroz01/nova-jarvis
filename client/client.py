@@ -17,6 +17,10 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger(__name__)
 
 recognizer = sr.Recognizer()
+recognizer.dynamic_energy_threshold = True
+recognizer.dynamic_energy_adjustment_damping = 0.15
+recognizer.dynamic_energy_ratio = 1.5
+recognizer.pause_threshold = 1.5  # seconds of silence to consider phrase complete
 mic = sr.Microphone(device_index=MIC_INDEX)
 
 
@@ -45,7 +49,7 @@ def send_chat(message: str, session_id: str) -> dict:
 
 def record_audio(source) -> bytes:
     """Record audio from microphone and return WAV bytes."""
-    audio = recognizer.listen(source, timeout=10)
+    audio = recognizer.listen(source, timeout=10, phrase_time_limit=15)
     return audio.get_wav_data()
 
 
@@ -66,15 +70,17 @@ def main():
 
     try:
         with mic as source:
-            recognizer.adjust_for_ambient_noise(source, duration=1)
+            logger.info("Calibrating for ambient noise (3s)...")
+            recognizer.adjust_for_ambient_noise(source, duration=3)
+            logger.info(f"Noise floor: energy_threshold={recognizer.energy_threshold:.0f}")
             logger.info("Microphone ready. Listening...")
 
             while True:
                 try:
                     if not conversation_mode:
-                        # Wake word detection mode
+                        # Wake word detection mode — short phrases only
                         logger.info("Listening for wake word...")
-                        audio = recognizer.listen(source, timeout=10)
+                        audio = recognizer.listen(source, timeout=10, phrase_time_limit=3)
                         transcript = recognizer.recognize_google(audio)
                         logger.info(f"Heard: {transcript}")
 
