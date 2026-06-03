@@ -39,9 +39,11 @@ async def voice(
 
     logger.info(f"Received audio: {len(audio_bytes)} bytes")
 
-    # Voice ID — verify speaker
+    # Voice ID — verify speaker (only for local client, not browser)
+    # Browser audio has different compression and mic characteristics
     from app.services.voice_id import verify, is_enrolled
-    if is_enrolled():
+    is_local_client = session_id and session_id.startswith("mac-")
+    if is_enrolled() and is_local_client:
         is_owner, similarity = verify(audio_bytes)
         if not is_owner:
             logger.info(f"Voice rejected (similarity={similarity:.3f})")

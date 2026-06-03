@@ -1237,10 +1237,10 @@ let hfMuted = false; // true while Jarvis is speaking to prevent self-listening
 
 const VAD_SILENCE_MS = 1500;       // ms of silence to stop recording
 const VAD_MIN_SPEECH_MS = 300;     // minimum speech duration to send
-const VAD_RESUME_DELAY_MS = 800;   // delay after Jarvis stops speaking before listening
-const VAD_MARGIN = 15;             // dB above noise floor to detect speech
-const VAD_CALIBRATION_MS = 2000;   // time to measure ambient noise at start
-const VAD_MIN_THRESHOLD = 20;      // absolute minimum threshold
+const VAD_RESUME_DELAY_MS = 1000;  // delay after N.O.V.A. stops speaking before listening
+const VAD_MARGIN = 25;             // dB above noise floor to detect speech (higher = less sensitive to bg noise)
+const VAD_CALIBRATION_MS = 3000;   // time to measure ambient noise at start
+const VAD_MIN_THRESHOLD = 25;      // absolute minimum threshold
 let hfSpeechStart = 0;
 let hfNoiseFloor = 20;             // adaptive noise floor (updated continuously)
 let hfCalibrating = false;

@@ -194,13 +194,15 @@ def invoke_agent(message: str, session_id: str, executor=None, retries: int = 2)
     msg_words = set(message.lower().strip().rstrip("?!.,").split())
 
     if _is_greeting(message) and not memory.chat_memory.messages:
-        # First greeting — fetch and cache
-        logger.info("Greeting detected — pre-fetching briefing in parallel")
-        t0 = time.time()
-        briefing = _prefetch_briefing()
-        _briefing_cache[session_id] = (briefing, time.time())
-        logger.info(f"Briefing pre-fetched in {time.time()-t0:.1f}s")
-        enriched_message = f"{message}\n\n{briefing}"
+        # First greeting — pre-fetch silently in background, cache for follow-ups
+        # Do NOT inject into prompt — greeting should be short, no data dump
+        import threading
+        def _bg_fetch():
+            t0 = time.time()
+            briefing = _prefetch_briefing()
+            _briefing_cache[session_id] = (briefing, time.time())
+            logger.info(f"Briefing pre-fetched in background ({time.time()-t0:.1f}s)")
+        threading.Thread(target=_bg_fetch, daemon=True).start()
     elif session_id in _briefing_cache and msg_words & _BRIEFING_MATCH:
         cached_data, cached_at = _briefing_cache[session_id]
         if time.time() - cached_at < _BRIEFING_TTL:
