@@ -110,13 +110,12 @@ def get_access_token() -> str:
         raise RuntimeError(f"Microsoft auth error: {e}")
 
 
-def graph_request(method: str, endpoint: str, data: dict = None) -> dict:
+def graph_request(method: str, endpoint: str, data: dict = None, headers: dict = None) -> dict:
     """Make an authenticated request to Microsoft Graph API."""
     token = get_access_token()
     # Encode query params properly — preserve OData operators
     if "?" in endpoint:
         path, qs = endpoint.split("?", 1)
-        # Parse params individually to avoid double-encoding
         encoded_parts = []
         for part in qs.split("&"):
             if "=" in part:
@@ -133,6 +132,9 @@ def graph_request(method: str, endpoint: str, data: dict = None) -> dict:
     req = urllib.request.Request(url, data=body, method=method)
     req.add_header("Authorization", f"Bearer {token}")
     req.add_header("Content-Type", "application/json")
+    if headers:
+        for k, v in headers.items():
+            req.add_header(k, v)
 
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:

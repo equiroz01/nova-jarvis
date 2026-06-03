@@ -3,8 +3,11 @@
 import logging
 from datetime import datetime, timedelta
 from langchain.tools import tool
+import pytz
 
 logger = logging.getLogger(__name__)
+
+TIMEZONE = "America/Panama"  # UTC-5, same as America/Bogota
 
 
 @tool
@@ -14,15 +17,17 @@ def get_outlook_events(days: int = 1) -> str:
     try:
         from app.services.microsoft_auth import graph_request
 
-        now = datetime.utcnow()
-        start = now.isoformat() + "Z"
-        end = (now + timedelta(days=max(1, days))).isoformat() + "Z"
+        tz = pytz.timezone(TIMEZONE)
+        now = datetime.now(tz)
+        start = now.isoformat()
+        end = (now + timedelta(days=max(1, days))).isoformat()
 
         result = graph_request(
             "GET",
             f"me/calendarview?startDateTime={start}&endDateTime={end}"
             f"&$orderby=start/dateTime&$top=15"
             f"&$select=subject,start,end,location,organizer,isAllDay,webLink",
+            headers={"Prefer": f'outlook.timezone="{TIMEZONE}"'},
         )
 
         events = result.get("value", [])
