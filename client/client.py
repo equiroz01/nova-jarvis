@@ -1,28 +1,29 @@
 #!/usr/bin/env python3
-"""Jarvis Mac Client - Wake word detection + voice interaction with cloud backend."""
+"""N.O.V.A. Mac Client — Wake word + voice interaction with Silero VAD."""
 
 import base64
 import io
 import logging
 import time
+import threading
 
+import numpy as np
+import pyaudio
 import requests
-import speech_recognition as sr
 
 from config import BACKEND_URL, CLIENT_ID, WAKE_WORD, MIC_INDEX, CONVERSATION_TIMEOUT
 from audio_player import play_audio, is_speaking
 from local_executor import LocalExecutor
+from vad import VoiceDetector, load_model as load_vad
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
-recognizer = sr.Recognizer()
-recognizer.dynamic_energy_threshold = True
-recognizer.dynamic_energy_adjustment_damping = 0.15
-recognizer.dynamic_energy_ratio = 1.5
-recognizer.pause_threshold = 0.8  # seconds of silence to consider phrase complete
-recognizer.non_speaking_duration = 0.5
-mic = sr.Microphone(device_index=MIC_INDEX)
+# Audio config
+SAMPLE_RATE = 16000
+CHANNELS = 1
+FORMAT = pyaudio.paInt16
+FRAME_SIZE = 512  # 32ms at 16kHz (Silero VAD minimum)
 
 
 def send_voice(audio_bytes: bytes, session_id: str) -> dict:
@@ -30,136 +31,170 @@ def send_voice(audio_bytes: bytes, session_id: str) -> dict:
     response = requests.post(
         f"{BACKEND_URL}/voice",
         files={"audio": ("command.wav", io.BytesIO(audio_bytes), "audio/wav")},
-        data={"session_id": session_id, "language": "en-US"},
-        timeout=30,
+        data={"session_id": session_id, "language": "es"},
+        timeout=60,
     )
     response.raise_for_status()
     return response.json()
 
 
 def send_chat(message: str, session_id: str) -> dict:
-    """Send text to the backend /chat endpoint (fallback)."""
+    """Send text to the backend /chat endpoint."""
     response = requests.post(
         f"{BACKEND_URL}/chat",
         json={"message": message, "session_id": session_id},
-        timeout=30,
+        timeout=60,
     )
     response.raise_for_status()
     return response.json()
 
 
-def record_audio(source) -> bytes:
-    """Record audio from microphone and return WAV bytes."""
-    audio = recognizer.listen(source, timeout=10, phrase_time_limit=20)
-    return audio.get_wav_data()
+def contains_wake_word(wav_bytes: bytes, wake_word: str) -> str:
+    """Send short audio to backend STT to check for wake word. Returns transcript."""
+    try:
+        response = requests.post(
+            f"{BACKEND_URL}/voice",
+            files={"audio": ("wake.wav", io.BytesIO(wav_bytes), "audio/wav")},
+            data={"session_id": "wake-check", "language": "es"},
+            timeout=10,
+        )
+        if response.ok:
+            data = response.json()
+            transcript = data.get("transcript", "")
+            if transcript:
+                logger.info(f"Heard: {transcript}")
+                if wake_word.lower() in transcript.lower():
+                    return transcript
+    except Exception as e:
+        logger.debug(f"Wake word check failed: {e}")
+    return ""
 
 
 def main():
     logger.info("=" * 50)
-    logger.info("Jarvis Mac Client")
+    logger.info("N.O.V.A. Mac Client (Silero VAD)")
     logger.info(f"Backend: {BACKEND_URL}")
     logger.info(f"Wake word: '{WAKE_WORD}'")
     logger.info("=" * 50)
+
+    # Load VAD model
+    load_vad()
 
     # Start local executor for WebSocket tool bridge
     executor = LocalExecutor(BACKEND_URL, CLIENT_ID)
     executor.start()
 
+    # Init audio stream
+    pa = pyaudio.PyAudio()
+    stream = pa.open(
+        format=FORMAT,
+        channels=CHANNELS,
+        rate=SAMPLE_RATE,
+        input=True,
+        input_device_index=MIC_INDEX,
+        frames_per_buffer=FRAME_SIZE,
+    )
+
     session_id = f"mac-{CLIENT_ID}"
     conversation_mode = False
     last_interaction = None
 
+    # Two detectors: short for wake word, long for commands
+    wake_detector = VoiceDetector(
+        speech_threshold=0.5,
+        silence_frames=15,     # ~450ms silence to cut (short for wake word)
+        min_speech_frames=5,   # ~150ms min speech
+        max_duration_s=4,      # wake word should be < 4s
+    )
+    cmd_detector = VoiceDetector(
+        speech_threshold=0.45,
+        silence_frames=30,     # ~900ms silence to cut (longer for natural speech)
+        min_speech_frames=10,  # ~300ms min speech
+        max_duration_s=20,     # commands up to 20s
+    )
+
+    logger.info("Microphone ready. Listening for wake word...")
+
     try:
-        with mic as source:
-            logger.info("Calibrating for ambient noise (3s)...")
-            recognizer.adjust_for_ambient_noise(source, duration=3)
-            # Bump threshold a bit above measured floor to ignore fan noise
-            recognizer.energy_threshold = max(recognizer.energy_threshold * 1.3, 300)
-            logger.info(f"Noise floor set: energy_threshold={recognizer.energy_threshold:.0f}")
-            logger.info("Microphone ready. Listening...")
+        while True:
+            # Skip while N.O.V.A. is speaking
+            if is_speaking.is_set():
+                time.sleep(0.05)
+                continue
 
-            while True:
-                try:
-                    # Skip listening while N.O.V.A. is speaking
-                    if is_speaking.is_set():
-                        time.sleep(0.1)
-                        continue
+            # Read audio frame from mic
+            try:
+                raw = stream.read(FRAME_SIZE, exception_on_overflow=False)
+            except Exception:
+                time.sleep(0.01)
+                continue
 
-                    if not conversation_mode:
-                        # Wake word detection mode
-                        logger.debug("Listening for wake word...")
-                        audio = recognizer.listen(source, timeout=5, phrase_time_limit=4)
-                        transcript = recognizer.recognize_google(audio)
-                        logger.info(f"Heard: {transcript}")
+            frame = np.frombuffer(raw, dtype=np.int16)
 
-                        if WAKE_WORD.lower() in transcript.lower():
-                            logger.info("Wake word detected!")
-                            # Send a quick "Yes sir?" via local TTS or backend
-                            try:
-                                result = send_chat("The user just said my name to activate me. Respond with a very short greeting.", session_id)
-                                if result.get("response"):
-                                    # Get TTS for greeting
-                                    pass
-                            except Exception:
-                                pass
+            if not conversation_mode:
+                # ── Wake word mode ──
+                wav = wake_detector.process_frame(frame)
+                if wav is not None:
+                    # Got a short utterance — check if it contains the wake word
+                    transcript = contains_wake_word(wav, WAKE_WORD)
+                    if transcript:
+                        logger.info("Wake word detected!")
+                        conversation_mode = True
+                        last_interaction = time.time()
+                        logger.info("Conversation mode ON")
 
-                            conversation_mode = True
-                            last_interaction = time.time()
-                            logger.info("Conversation mode ON")
-                    else:
-                        # Conversation mode - process commands
-                        logger.info("Listening for command...")
-                        wav_data = record_audio(source)
-
-                        # Send to backend voice endpoint
+                        # Send greeting to get briefing
                         try:
-                            result = send_voice(wav_data, session_id)
-
-                            transcript = result.get("transcript", "")
+                            result = send_voice(wav, session_id)
                             response_text = result.get("response", "")
                             audio_b64 = result.get("audio_base64", "")
-
-                            logger.info(f"You: {transcript}")
-                            logger.info(f"Jarvis: {response_text}")
-
-                            # Play audio response
+                            if response_text:
+                                logger.info(f"N.O.V.A.: {response_text[:100]}...")
                             if audio_b64:
-                                audio_bytes = base64.b64decode(audio_b64)
-                                play_audio(audio_bytes)
-
+                                play_audio(base64.b64decode(audio_b64))
                             last_interaction = time.time()
+                        except Exception as e:
+                            logger.error(f"Greeting error: {e}")
+            else:
+                # ── Conversation mode ──
+                wav = cmd_detector.process_frame(frame)
+                if wav is not None:
+                    logger.info("Processing command...")
+                    try:
+                        result = send_voice(wav, session_id)
 
-                        except requests.exceptions.ConnectionError:
-                            logger.error(f"Cannot connect to backend at {BACKEND_URL}")
-                            # Fallback: use local speech recognition
-                            try:
-                                text = recognizer.recognize_google(sr.AudioData(wav_data, 16000, 2))
-                                result = send_chat(text, session_id)
-                                logger.info(f"Jarvis: {result.get('response', 'Error')}")
-                            except Exception as e:
-                                logger.error(f"Fallback also failed: {e}")
+                        transcript = result.get("transcript", "")
+                        response_text = result.get("response", "")
+                        audio_b64 = result.get("audio_base64", "")
 
-                        # Check timeout
-                        if time.time() - last_interaction > CONVERSATION_TIMEOUT:
-                            logger.info("Timeout - returning to wake word mode")
-                            conversation_mode = False
+                        if transcript:
+                            logger.info(f"You: {transcript}")
+                        if response_text:
+                            logger.info(f"N.O.V.A.: {response_text[:100]}...")
 
-                except sr.WaitTimeoutError:
-                    if conversation_mode and time.time() - last_interaction > CONVERSATION_TIMEOUT:
-                        logger.info("Timeout - returning to wake word mode")
-                        conversation_mode = False
-                except sr.UnknownValueError:
-                    logger.debug("Could not understand audio")
-                except requests.exceptions.RequestException as e:
-                    logger.error(f"Backend request error: {e}")
-                    time.sleep(1)
-                except Exception as e:
-                    logger.error(f"Error: {e}")
-                    time.sleep(1)
+                        if audio_b64:
+                            play_audio(base64.b64decode(audio_b64))
+
+                        last_interaction = time.time()
+
+                    except requests.exceptions.ConnectionError:
+                        logger.error(f"Cannot connect to backend at {BACKEND_URL}")
+                    except Exception as e:
+                        logger.error(f"Error: {e}")
+                        time.sleep(0.5)
+
+                # Check timeout
+                if last_interaction and time.time() - last_interaction > CONVERSATION_TIMEOUT:
+                    logger.info("Timeout — returning to wake word mode")
+                    conversation_mode = False
+                    cmd_detector._reset()
 
     except KeyboardInterrupt:
         logger.info("Shutting down...")
     finally:
+        stream.stop_stream()
+        stream.close()
+        pa.terminate()
         executor.stop()
 
 

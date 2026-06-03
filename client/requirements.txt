@@ -1,8 +1,9 @@
-SpeechRecognition>=3.14.0
 PyAudio>=0.2.14
 requests>=2.32.0
 websocket-client>=1.8.0
 python-dotenv>=1.0.0
+numpy>=1.24.0
+torch>=2.0.0
 
 # Local tools
 mss>=10.0.0
