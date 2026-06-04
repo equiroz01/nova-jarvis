@@ -199,6 +199,7 @@ function hfVADLoop() {
   if (hfState === 'listening') {
     if (level > threshold) {
       console.log(`[VAD] Speech detected: level=${level.toFixed(0)} > threshold=${threshold.toFixed(0)}`);
+      clearHudText(); // Fade out previous conversation
       hfSpeechDetected = true;
       hfSpeechStart = now;
       hfSamples = [];
@@ -263,7 +264,6 @@ async function hfSendAudio() {
           hideWelcome();
           if (data.transcript) { addMessage(data.transcript, 'user'); if (hudT) hudT.textContent = '"' + data.transcript + '"'; }
           addMessage(data.response, 'jarvis');
-          if (hudR) hudR.textContent = data.response.replace(/\*\*/g, '').substring(0, 200);
 
           setHfState('speaking');
           startInterruptMonitor();
@@ -314,7 +314,6 @@ async function hfSendAudio() {
       }
       if (data.response) {
         addMessage(data.response, 'jarvis');
-        if (hudR) hudR.textContent = data.response.replace(/\*\*/g, '').substring(0, 200);
       }
 
       setHfState('speaking');
@@ -397,10 +396,37 @@ export function stopHandsfree() {
 
 let _hfTTSAbort = null;
 
+function clearHudText() {
+  const hudT = document.getElementById('hfHudTranscript');
+  const hudR = document.getElementById('hfHudResponse');
+  if (hudT) { hudT.classList.add('fade-out'); }
+  if (hudR) { hudR.classList.add('fade-out'); }
+  setTimeout(() => {
+    if (hudT) { hudT.textContent = ''; hudT.classList.remove('fade-out'); }
+    if (hudR) { hudR.textContent = ''; hudR.classList.remove('fade-out'); }
+  }, 500);
+}
+
+function appendHudSentence(text) {
+  const hudR = document.getElementById('hfHudResponse');
+  if (!hudR) return;
+  const clean = text.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1')
+    .replace(/`(.+?)`/g, '$1').replace(/^[-*]\s*/gm, '').trim();
+  if (!clean) return;
+  const span = document.createElement('span');
+  span.className = 'hf-sentence';
+  span.textContent = (hudR.childNodes.length ? ' ' : '') + clean;
+  hudR.appendChild(span);
+}
+
 async function playChunkedHF(text) {
   if (_hfTTSAbort) _hfTTSAbort.abort();
   _hfTTSAbort = new AbortController();
   const signal = _hfTTSAbort.signal;
+
+  // Clear previous response
+  const hudR = document.getElementById('hfHudResponse');
+  if (hudR) hudR.textContent = '';
 
   try {
     const r = await fetch(API + '/tts/chunked', {
@@ -426,6 +452,8 @@ async function playChunkedHF(text) {
         if (!line.trim() || signal.aborted) continue;
         try {
           const chunk = JSON.parse(line);
+          // Show sentence on HUD as it plays
+          if (chunk.text) appendHudSentence(chunk.text);
           if (chunk.audio_base64) {
             await playAudioAsync(chunk.audio_base64, 'response');
           }

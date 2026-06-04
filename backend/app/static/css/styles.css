@@ -399,23 +399,34 @@ svg.reactor-svg .ring-sweep{transform-origin:120px 120px}
   transition:color 0.3s;
 }
 
-/* HUD transcript */
+/* HUD transcript — what user said */
 .hf-hud-transcript{
-  font-family:'Rajdhani',sans-serif;font-size:16px;
-  color:var(--text-secondary);margin-top:12px;
-  max-width:500px;text-align:center;
-  min-height:24px;
-  opacity:0.7;
-}
-
-/* HUD response */
-.hf-hud-response{
-  font-family:'Rajdhani',sans-serif;font-size:15px;
-  color:var(--text-primary);margin-top:8px;
+  font-family:'Share Tech Mono',monospace;font-size:14px;
+  color:var(--cyan);margin-top:16px;
   max-width:600px;text-align:center;
-  min-height:20px;
-  padding:0 20px;
+  min-height:24px;
+  opacity:0.8;
+  letter-spacing:1px;
+  transition:opacity 0.5s;
 }
+.hf-hud-transcript.fade-out{opacity:0}
+
+/* HUD response — N.O.V.A. streaming text */
+.hf-hud-response{
+  font-family:'Rajdhani',sans-serif;font-size:17px;
+  color:var(--text-primary);margin-top:12px;
+  max-width:700px;text-align:center;
+  min-height:20px;
+  padding:0 24px;
+  line-height:1.7;
+  transition:opacity 0.5s;
+}
+.hf-hud-response.fade-out{opacity:0}
+.hf-hud-response .hf-sentence{
+  display:inline;
+  animation:hfSentenceIn 0.3s ease-out;
+}
+@keyframes hfSentenceIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 
 /* Close button */
 .hf-close{
