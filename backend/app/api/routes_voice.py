@@ -62,7 +62,7 @@ async def voice(
         # No speech detected — return friendly message instead of error
         return VoiceResponse(
             transcript="",
-            response="I didn't catch that. Could you try again?",
+            response="No le escuché bien, Señor. ¿Puede repetirme?",
             audio_base64="",
             session_id=session_id,
         )
