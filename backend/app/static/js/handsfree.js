@@ -27,12 +27,12 @@ let hfSpeechDetected = false;
 let hfRAF = null;
 let hfMuted = false;
 
-const VAD_SILENCE_MS = 1500;
-const VAD_MIN_SPEECH_MS = 300;
-const VAD_RESUME_DELAY_MS = 1000;
-const VAD_MARGIN = 25;
-const VAD_CALIBRATION_MS = 3000;
-const VAD_MIN_THRESHOLD = 25;
+const VAD_SILENCE_MS = 2000;      // 2s of silence to end utterance (was 1.5 — too short for natural pauses)
+const VAD_MIN_SPEECH_MS = 400;    // 400ms minimum speech to count (filters coughs/clicks)
+const VAD_RESUME_DELAY_MS = 1000; // 1s after N.O.V.A. speaks before listening again
+const VAD_MARGIN = 20;            // dB above noise floor to detect speech (was 25 — too high)
+const VAD_CALIBRATION_MS = 3000;  // 3s noise floor calibration
+const VAD_MIN_THRESHOLD = 20;     // absolute minimum threshold
 let hfSpeechStart = 0;
 let hfNoiseFloor = 20;
 let hfCalibrating = false;
@@ -198,6 +198,7 @@ function hfVADLoop() {
 
   if (hfState === 'listening') {
     if (level > threshold) {
+      console.log(`[VAD] Speech detected: level=${level.toFixed(0)} > threshold=${threshold.toFixed(0)}`);
       hfSpeechDetected = true;
       hfSpeechStart = now;
       hfSamples = [];
@@ -208,10 +209,14 @@ function hfVADLoop() {
       hfSilenceStart = 0;
     } else {
       if (hfSilenceStart === 0) hfSilenceStart = now;
-      if (now - hfSilenceStart > VAD_SILENCE_MS) {
-        if (now - hfSpeechStart > VAD_MIN_SPEECH_MS) {
+      const silenceElapsed = now - hfSilenceStart;
+      if (silenceElapsed > VAD_SILENCE_MS) {
+        const speechDuration = now - hfSpeechStart;
+        console.log(`[VAD] Utterance complete: ${(speechDuration/1000).toFixed(1)}s speech, sending to backend`);
+        if (speechDuration > VAD_MIN_SPEECH_MS) {
           hfSendAudio();
         } else {
+          console.log(`[VAD] Too short (${speechDuration}ms), discarding`);
           hfSamples = [];
           hfSpeechDetected = false;
           hfSilenceStart = 0;
