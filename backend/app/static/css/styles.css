@@ -413,20 +413,30 @@ svg.reactor-svg .ring-sweep{transform-origin:120px 120px}
 
 /* HUD response — N.O.V.A. streaming text */
 .hf-hud-response{
-  font-family:'Rajdhani',sans-serif;font-size:17px;
-  color:var(--text-primary);margin-top:12px;
-  max-width:700px;text-align:center;
-  min-height:20px;
-  padding:0 24px;
+  font-family:'Rajdhani',sans-serif;font-size:16px;
+  color:var(--text-primary);margin-top:16px;
+  width:90%;max-width:800px;
+  max-height:45vh;
+  overflow-y:auto;
+  text-align:left;
+  padding:0 32px;
   line-height:1.7;
   transition:opacity 0.5s;
+  scrollbar-width:thin;
+  scrollbar-color:var(--cyan-dim) transparent;
 }
+.hf-hud-response::-webkit-scrollbar{width:4px}
+.hf-hud-response::-webkit-scrollbar-thumb{background:var(--cyan-dim);border-radius:4px}
 .hf-hud-response.fade-out{opacity:0}
 .hf-hud-response .hf-sentence{
-  display:inline;
+  display:block;margin-bottom:4px;
   animation:hfSentenceIn 0.3s ease-out;
 }
-@keyframes hfSentenceIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.hf-hud-response .hf-sentence strong{color:var(--cyan)}
+.hf-hud-response .hf-sentence .hf-bullet{
+  color:var(--amber);margin-right:6px;
+}
+@keyframes hfSentenceIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 
 /* Close button */
 .hf-close{

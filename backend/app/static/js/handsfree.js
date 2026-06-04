@@ -410,13 +410,56 @@ function clearHudText() {
 function appendHudSentence(text) {
   const hudR = document.getElementById('hfHudResponse');
   if (!hudR) return;
-  const clean = text.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1')
-    .replace(/`(.+?)`/g, '$1').replace(/^[-*]\s*/gm, '').trim();
-  if (!clean) return;
-  const span = document.createElement('span');
-  span.className = 'hf-sentence';
-  span.textContent = (hudR.childNodes.length ? ' ' : '') + clean;
-  hudR.appendChild(span);
+  if (!text.trim()) return;
+
+  // Split by newlines to handle bullet points
+  const lines = text.split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    const div = document.createElement('div');
+    div.className = 'hf-sentence';
+
+    // Check if it's a bullet point
+    const bulletMatch = trimmed.match(/^[-*•]\s+(.*)/);
+    if (bulletMatch) {
+      const bullet = document.createElement('span');
+      bullet.className = 'hf-bullet';
+      bullet.textContent = '▸ ';
+      div.appendChild(bullet);
+      appendRichText(div, bulletMatch[1]);
+    } else {
+      appendRichText(div, trimmed);
+    }
+
+    hudR.appendChild(div);
+  }
+  // Auto-scroll to bottom
+  hudR.scrollTop = hudR.scrollHeight;
+}
+
+function appendRichText(container, text) {
+  // Render **bold**, *italic*, `code` as DOM elements
+  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g);
+  for (const part of parts) {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      const strong = document.createElement('strong');
+      strong.textContent = part.slice(2, -2);
+      container.appendChild(strong);
+    } else if (part.startsWith('*') && part.endsWith('*')) {
+      const em = document.createElement('em');
+      em.textContent = part.slice(1, -1);
+      container.appendChild(em);
+    } else if (part.startsWith('`') && part.endsWith('`')) {
+      const code = document.createElement('code');
+      code.textContent = part.slice(1, -1);
+      code.style.cssText = 'color:var(--amber);font-family:Share Tech Mono,monospace;font-size:14px';
+      container.appendChild(code);
+    } else {
+      container.appendChild(document.createTextNode(part));
+    }
+  }
 }
 
 async function playChunkedHF(text) {
