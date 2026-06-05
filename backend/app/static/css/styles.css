@@ -411,7 +411,7 @@ svg.reactor-svg .ring-sweep{transform-origin:120px 120px}
 }
 .hf-hud-transcript.fade-out{opacity:0}
 
-/* HUD response — N.O.V.A. streaming text */
+/* HUD response — NOVA streaming text */
 .hf-hud-response{
   font-family:'Rajdhani',sans-serif;font-size:16px;
   color:var(--text-primary);margin-top:16px;

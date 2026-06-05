@@ -1,5 +1,5 @@
 """
-N.O.V.A. Brain — Obsidian vault as persistent knowledge graph.
+NOVA Brain — Obsidian vault as persistent knowledge graph.
 
 Reads and writes markdown notes with [[links]] to build a knowledge graph.
 The vault can be opened in Obsidian for visual graph exploration.

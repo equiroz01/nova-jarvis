@@ -1,4 +1,4 @@
-"""Outlook Mail tools for N.O.V.A. — Microsoft 365 email via Graph API."""
+"""Outlook Mail tools for NOVA — Microsoft 365 email via Graph API."""
 
 import logging
 from langchain.tools import tool

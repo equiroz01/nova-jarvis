@@ -1,4 +1,4 @@
-"""Settings API — manage MCP servers, Voice ID, AgilityTask and N.O.V.A. configuration."""
+"""Settings API — manage MCP servers, Voice ID, AgilityTask and NOVA configuration."""
 
 import json
 import yaml
@@ -308,7 +308,7 @@ async def microsoft_delete_credentials():
 
 @router.get("/keychain/list")
 async def keychain_list():
-    """List all secrets in N.O.V.A. Keychain (masked values)."""
+    """List all secrets in NOVA Keychain (masked values)."""
     from app.services.keychain import keychain
     keys = keychain.list()
     secrets = []

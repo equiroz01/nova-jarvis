@@ -1,5 +1,5 @@
 #!/bin/bash
-# N.O.V.A. - Quick Start Script
+# NOVA - Quick Start Script
 
 set -e
 
@@ -8,7 +8,7 @@ BACKEND_DIR="$SCRIPT_DIR/backend"
 ENV_FILE="$SCRIPT_DIR/.env"
 
 echo "========================================="
-echo "  N.O.V.A. - Starting Up"
+echo "  NOVA - Starting Up"
 echo "========================================="
 
 # Check .env

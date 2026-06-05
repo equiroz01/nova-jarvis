@@ -1,4 +1,4 @@
-"""AgilityTask API tools for N.O.V.A. — project and task management for Hypernova Labs."""
+"""AgilityTask API tools for NOVA — project and task management for Hypernova Labs."""
 
 import json
 import logging

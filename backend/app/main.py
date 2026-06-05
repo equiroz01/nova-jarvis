@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("N.O.V.A. backend starting up...")
+    logger.info("NOVA backend starting up...")
     from app.agent.orchestrator import build_agent
     app.state.agent_executor = build_agent()
     logger.info("Agent executor ready.")
@@ -44,7 +44,7 @@ async def lifespan(app: FastAPI):
     logger.info("Jarvis backend shutting down...")
 
 
-app = FastAPI(title="N.O.V.A. Backend", version=settings.nova_version, lifespan=lifespan)
+app = FastAPI(title="NOVA Backend", version=settings.nova_version, lifespan=lifespan)
 
 # ── API key middleware for external (non-LAN) requests ──
 _LAN_NETWORKS = [

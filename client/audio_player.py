@@ -6,7 +6,7 @@ import threading
 
 logger = logging.getLogger(__name__)
 
-# Flag to signal when N.O.V.A. is speaking — mic should ignore audio
+# Flag to signal when NOVA is speaking — mic should ignore audio
 is_speaking = threading.Event()
 
 

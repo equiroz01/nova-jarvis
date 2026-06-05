@@ -1,4 +1,4 @@
-"""Outlook Calendar tools for N.O.V.A. — Microsoft 365 calendar via Graph API."""
+"""Outlook Calendar tools for NOVA — Microsoft 365 calendar via Graph API."""
 
 import logging
 from datetime import datetime, timedelta

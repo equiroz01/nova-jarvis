@@ -9,7 +9,7 @@ export function addMessage(text, who) {
 
   const label = document.createElement('div');
   label.className = 'msg-label';
-  label.textContent = who === 'user' ? 'YOU' : 'N.O.V.A.';
+  label.textContent = who === 'user' ? 'YOU' : 'NOVA';
 
   const bubble = document.createElement('div');
   bubble.className = 'msg ' + (who === 'user' ? 'user-msg' : 'jarvis-msg');
@@ -40,7 +40,7 @@ export function addStreamMessage() {
 
   const label = document.createElement('div');
   label.className = 'msg-label';
-  label.textContent = 'N.O.V.A.';
+  label.textContent = 'NOVA';
 
   const bubble = document.createElement('div');
   bubble.className = 'msg jarvis-msg';

@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     # Alexa
     alexa_skill_id: Optional[str] = None
 
-    # N.O.V.A. Home Server
+    # NOVA Home Server
     nova_home: Optional[str] = None  # ~/.nova — overrides default paths
     nova_api_key: Optional[str] = None  # API key for external (non-LAN) access
     nova_version: str = "1.0.0"

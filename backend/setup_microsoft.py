@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate Microsoft OAuth2 refresh token for N.O.V.A.
+Generate Microsoft OAuth2 refresh token for NOVA
 Run after registering an app in Azure AD.
 
 Usage:
@@ -21,7 +21,7 @@ SCOPES = "Mail.Read Mail.Send Calendars.ReadWrite User.Read offline_access"
 
 def main():
     print("\n╔══════════════════════════════════════╗")
-    print("║  N.O.V.A. — Microsoft 365 Setup      ║")
+    print("║  NOVA — Microsoft 365 Setup      ║")
     print("╚══════════════════════════════════════╝\n")
 
     client_id = input("  Client ID (Application ID): ").strip()
@@ -59,7 +59,7 @@ def main():
             self.send_header("Content-Type", "text/html")
             self.end_headers()
             if auth_code:
-                self.wfile.write(b"<h2>N.O.V.A. authorized! You can close this tab.</h2>")
+                self.wfile.write(b"<h2>NOVA authorized! You can close this tab.</h2>")
             else:
                 error = params.get("error_description", ["Unknown error"])[0]
                 self.wfile.write(f"<h2>Error: {error}</h2>".encode())
@@ -145,7 +145,7 @@ def main():
     print(f"  MICROSOFT_CLIENT_SECRET={client_secret}")
     print(f"  MICROSOFT_TENANT_ID={tenant_id}")
     print(f"  MICROSOFT_REFRESH_TOKEN={refresh_token[:20]}...")
-    print(f"\n  Restart N.O.V.A. backend and test:")
+    print(f"\n  Restart NOVA backend and test:")
     print(f'  "Jarvis, ¿qué reuniones tengo hoy?"')
     print(f'  "Jarvis, ¿hay correos sin leer?"')
     print()

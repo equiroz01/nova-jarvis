@@ -1,5 +1,5 @@
 """
-N.O.V.A. TTS — Microsoft Edge Neural voices via edge-tts.
+NOVA TTS — Microsoft Edge Neural voices via edge-tts.
 Fast, free, no API key needed. Salome colombiana.
 """
 
@@ -10,7 +10,7 @@ import edge_tts
 
 logger = logging.getLogger(__name__)
 
-# N.O.V.A. voice config
+# NOVA voice config
 VOICE_ES = "es-CO-SalomeNeural"
 VOICE_EN = "en-US-AvaNeural"
 RATE = "+22%"       # Fast but natural — like someone speaking with energy

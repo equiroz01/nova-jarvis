@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>N.O.V.A. — Settings</title>
+<title>NOVA — Settings</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
@@ -142,7 +142,7 @@ select.form-input{cursor:pointer}
 <header class="header">
   <div class="header-left">
     <div>
-      <div class="logo">N.O.V.A.</div>
+      <div class="logo">NOVA</div>
       <div class="logo-sub">SETTINGS</div>
     </div>
   </div>
@@ -155,7 +155,7 @@ select.form-input{cursor:pointer}
   <div class="mcp-card" id="voiceIdCard">
     <div class="mcp-info">
       <div class="mcp-name" id="voiceIdStatus">Checking...</div>
-      <div class="mcp-desc">N.O.V.A. solo responde a tu voz. Graba 3 muestras para crear tu huella vocal.</div>
+      <div class="mcp-desc">NOVA solo responde a tu voz. Graba 3 muestras para crear tu huella vocal.</div>
       <div class="mcp-meta" id="voiceIdMeta"></div>
     </div>
   </div>
@@ -163,7 +163,7 @@ select.form-input{cursor:pointer}
   <div id="enrollSection" style="margin:12px 0 24px">
     <div class="mcp-desc" style="margin-bottom:8px">
       Graba 3 frases (5+ segundos cada una). Di algo como:<br>
-      <em>"Buenos días, soy Emeldo Quiroz y esta es mi voz para N.O.V.A."</em>
+      <em>"Buenos días, soy Emeldo Quiroz y esta es mi voz para NOVA"</em>
     </div>
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
       <button class="btn btn-primary" id="recBtn" onclick="toggleEnrollRec()">GRABAR MUESTRA</button>
@@ -177,7 +177,7 @@ select.form-input{cursor:pointer}
   <div class="mcp-card" id="atCard">
     <div class="mcp-info">
       <div class="mcp-name" id="atStatus">Checking...</div>
-      <div class="mcp-desc">Gestión de proyectos y tareas de Hypernova Labs. N.O.V.A. puede listar proyectos, crear tareas, ver métricas y más.</div>
+      <div class="mcp-desc">Gestión de proyectos y tareas de Hypernova Labs. NOVA puede listar proyectos, crear tareas, ver métricas y más.</div>
       <div class="mcp-meta" id="atMeta"></div>
     </div>
   </div>
@@ -216,7 +216,7 @@ select.form-input{cursor:pointer}
   <div class="mcp-card" id="msCard">
     <div class="mcp-info">
       <div class="mcp-name" id="msStatus">Checking...</div>
-      <div class="mcp-desc">Outlook Calendar y Mail. N.O.V.A. puede ver reuniones, buscar correos, enviar emails y agendar eventos.</div>
+      <div class="mcp-desc">Outlook Calendar y Mail. NOVA puede ver reuniones, buscar correos, enviar emails y agendar eventos.</div>
       <div class="mcp-meta" id="msMeta"></div>
     </div>
   </div>
@@ -512,7 +512,7 @@ async function loadVoiceIdStatus() {
     if (d.enrolled) {
       status.textContent = 'VOICEPRINT ACTIVE';
       status.style.color = '#00e676';
-      meta.textContent = 'N.O.V.A. reconoce tu voz. Puedes re-enrollar si lo necesitas.';
+      meta.textContent = 'NOVA reconoce tu voz. Puedes re-enrollar si lo necesitas.';
     } else {
       status.textContent = 'NO VOICEPRINT';
       status.style.color = '#ffab00';

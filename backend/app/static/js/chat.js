@@ -33,7 +33,7 @@ function autoResize(el) {
 
 function handleTextKey(e) {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText(); }
-  else { interruptTTS(); } // User typing = interrupt N.O.V.A.
+  else { interruptTTS(); } // User typing = interrupt NOVA
   autoResize(e.target);
 }
 

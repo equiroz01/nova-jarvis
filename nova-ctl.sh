@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# nova-ctl — N.O.V.A. service management CLI
+# nova-ctl — NOVA service management CLI
 set -euo pipefail
 
 NOVA_HOME="${NOVA_HOME:-$HOME/.nova}"
@@ -24,7 +24,7 @@ _status_icon() {
 }
 
 cmd_start() {
-  echo -e "${CYAN}Starting N.O.V.A. services...${NC}"
+  echo -e "${CYAN}Starting NOVA services...${NC}"
   mkdir -p "$NOVA_LOGS"
   for label in $BACKEND_LABEL $CLIENT_LABEL $TUNNEL_LABEL; do
     plist="$LAUNCH_DIR/${label}.plist"
@@ -44,7 +44,7 @@ cmd_start() {
 }
 
 cmd_stop() {
-  echo -e "${CYAN}Stopping N.O.V.A. services...${NC}"
+  echo -e "${CYAN}Stopping NOVA services...${NC}"
   for label in $TUNNEL_LABEL $CLIENT_LABEL $BACKEND_LABEL; do
     if _is_loaded "$label"; then
       launchctl bootout "$GUI_DOMAIN/$label" 2>/dev/null || true
@@ -63,7 +63,7 @@ cmd_restart() {
 
 cmd_status() {
   echo ""
-  echo -e "${BOLD}N.O.V.A. Status${NC}"
+  echo -e "${BOLD}NOVA Status${NC}"
   echo -e "────────────────────────────────────"
   echo -e "  Backend   $(_status_icon $BACKEND_LABEL)"
   echo -e "  Client    $(_status_icon $CLIENT_LABEL)"
@@ -101,7 +101,7 @@ cmd_logs() {
 }
 
 cmd_update() {
-  echo -e "${CYAN}Updating N.O.V.A....${NC}"
+  echo -e "${CYAN}Updating NOVA...${NC}"
   cd "$NOVA_APP"
 
   git fetch origin main 2>/dev/null
@@ -138,7 +138,7 @@ cmd_tunnel() {
 }
 
 cmd_uninstall() {
-  echo -e "${RED}${BOLD}Uninstalling N.O.V.A.${NC}"
+  echo -e "${RED}${BOLD}Uninstalling NOVA${NC}"
   echo ""
   read -p "This will stop services and remove launchd plists. Continue? (y/N) " confirm
   [[ "$confirm" != "y" && "$confirm" != "Y" ]] && exit 0
@@ -163,12 +163,12 @@ cmd_uninstall() {
   fi
 
   echo ""
-  echo -e "${GREEN}N.O.V.A. uninstalled.${NC}"
+  echo -e "${GREEN}NOVA uninstalled.${NC}"
 }
 
 cmd_help() {
   echo ""
-  echo -e "${BOLD}nova${NC} — N.O.V.A. service management"
+  echo -e "${BOLD}nova${NC} — NOVA service management"
   echo ""
   echo "Usage: nova <command>"
   echo ""

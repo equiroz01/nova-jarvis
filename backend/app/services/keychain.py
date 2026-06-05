@@ -1,5 +1,5 @@
 """
-N.O.V.A. Keychain — Centralized secret management via macOS Keychain.
+NOVA Keychain — Centralized secret management via macOS Keychain.
 
 All secrets stored under service prefix "nova." in the login keychain.
 Fallback: reads from .env / config files if Keychain is unavailable.
@@ -23,7 +23,7 @@ SERVICE_PREFIX = "nova"
 
 
 class NovaKeychain:
-    """macOS Keychain wrapper for N.O.V.A. secrets."""
+    """macOS Keychain wrapper for NOVA secrets."""
 
     def _run(self, args: list[str], input_data: str = None) -> tuple[int, str]:
         """Run a security command."""
@@ -80,7 +80,7 @@ class NovaKeychain:
         return code == 0
 
     def list(self) -> list[str]:
-        """List all N.O.V.A. secret keys in Keychain."""
+        """List all NOVA secret keys in Keychain."""
         code, output = self._run(["dump-keychain"])
         if code != 0:
             return []
@@ -198,7 +198,7 @@ class NovaKeychain:
             val = self.get(k)
             masked = val[:4] + "…" + val[-4:] if len(val) > 8 else "****"
             lines.append(f"  {k}: {masked}")
-        return f"N.O.V.A. Keychain ({len(keys)} secrets):\n" + "\n".join(lines)
+        return f"NOVA Keychain ({len(keys)} secrets):\n" + "\n".join(lines)
 
 
 # Singleton

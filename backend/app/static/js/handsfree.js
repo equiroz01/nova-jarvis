@@ -29,24 +29,16 @@ let hfMuted = false;
 
 const VAD_SILENCE_MS = 2000;      // 2s of silence to end utterance (was 1.5 — too short for natural pauses)
 const VAD_MIN_SPEECH_MS = 400;    // 400ms minimum speech to count (filters coughs/clicks)
-const VAD_RESUME_DELAY_MS = 1000; // 1s after N.O.V.A. speaks before listening again
+const VAD_RESUME_DELAY_MS = 1000; // 1s after NOVA speaks before listening again
 const VAD_MARGIN = 20;            // dB above noise floor to detect speech (was 25 — too high)
 const VAD_CALIBRATION_MS = 3000;  // 3s noise floor calibration
 const VAD_MIN_THRESHOLD = 20;     // absolute minimum threshold
 let hfSpeechStart = 0;
 let hfNoiseFloor = 20;
 let hfCalibrating = false;
-let hfAwake = false;
-const WAKE_WORD = 'nova';
-// Whisper often mishears "Nova" as these in Spanish mode
-const WAKE_VARIANTS = ['nova', 'no va', 'noba', 'no ba', 'noва', 'nová', 'no, va', 'no-va'];
+let hfAwake = true;  // Always awake — no wake word needed
 let _interruptRAF = null;
 const INTERRUPT_MARGIN = 12;
-
-function containsWakeWord(transcript) {
-  const t = transcript.toLowerCase().replace(/[¡!¿?,.:;]/g, '').trim();
-  return WAKE_VARIANTS.some(v => t.includes(v));
-}
 
 function setHfState(state) {
   hfState = state;
@@ -243,52 +235,7 @@ async function hfSendAudio() {
   const hudT = document.getElementById('hfHudTranscript');
   const hudS = document.getElementById('hfHudStatus');
 
-  // If not awake, check for wake word — send /voice ONCE and reuse the response
-  if (!hfAwake) {
-    try {
-      const form = new FormData();
-      form.append('audio', wavBlob, 'recording.wav');
-      form.append('session_id', sessionId);
-      form.append('language', 'es');
-      const r = await fetch(API + '/voice', { method: 'POST', body: form });
-      const data = await r.json();
-      const transcript = (data.transcript || '').toLowerCase();
-
-      if (containsWakeWord(transcript)) {
-        hfAwake = true;
-        if (hudS) hudS.textContent = 'ACTIVE';
-        console.log('Wake word detected:', transcript);
-
-        // BUG FIX: Reuse the SAME response — do NOT call /voice again
-        if (data.response) {
-          hideWelcome();
-          if (data.transcript) { addMessage(data.transcript, 'user'); if (hudT) hudT.textContent = '"' + data.transcript + '"'; }
-          addMessage(data.response, 'jarvis');
-
-          setHfState('speaking');
-          startInterruptMonitor();
-          await playChunkedHF(data.response);
-        }
-      } else {
-        console.log('Not wake word, ignoring:', transcript);
-      }
-    } catch (e) {
-      console.error('Wake check error:', e);
-    }
-
-    // Resume listening
-    cancelAnimationFrame(_interruptRAF);
-    if (hfActive && hfState !== 'speech') {
-      await new Promise(r => setTimeout(r, VAD_RESUME_DELAY_MS));
-      hfUnmute();
-      setHfState('listening');
-      if (!hfAwake && hudS) hudS.textContent = 'LISTENING -- say "NOVA"';
-      hfVADLoop();
-    }
-    return;
-  }
-
-  // Already awake — process command normally
+  // Process command directly — no wake word needed
   hideWelcome();
 
   const filler = speakFiller('general');
@@ -363,14 +310,13 @@ async function startHandsfree() {
 
     // Calibrate noise floor before listening
     hfCalibrating = true;
-    hfAwake = false;
     setHfState('listening');
     const hudS = document.getElementById('hfHudStatus');
     if (hudS) hudS.textContent = 'CALIBRATING...';
     calibrateNoiseFloor(() => {
       hfCalibrating = false;
       setHfState('listening');
-      if (hudS) hudS.textContent = 'LISTENING -- say "NOVA"';
+      if (hudS) hudS.textContent = 'LISTENING';
       hfVADLoop();
     });
   } catch (e) {

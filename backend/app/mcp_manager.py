@@ -1,5 +1,5 @@
 """
-N.O.V.A. MCP Manager — Connects to MCP servers and exposes their tools to the agent.
+NOVA MCP Manager — Connects to MCP servers and exposes their tools to the agent.
 Supports: stdio, sse, http (streamable HTTP)
 """
 

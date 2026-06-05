@@ -1,4 +1,4 @@
-# N.O.V.A. — Setup Guide
+# NOVA — Setup Guide
 
 ## Quick Install (Mac Studio)
 
@@ -27,8 +27,8 @@ nova uninstall    # remove services and optionally all data
 
 ```
 Mac Studio (always on)
-├── N.O.V.A. Backend (:8080) — FastAPI + Gemini + Whisper STT + Edge TTS
-├── N.O.V.A. Client — wake word detection + voice interaction
+├── NOVA Backend (:8080) — FastAPI + Gemini + Whisper STT + Edge TTS
+├── NOVA Client — wake word detection + voice interaction
 └── Cloudflare Tunnel — HTTPS access for Alexa + external web
 
 Consumers:
@@ -63,7 +63,7 @@ The installer automatically places `nova-brain` in iCloud Drive:
 ~/Library/Mobile Documents/com~apple~CloudDocs/nova-brain/
 ```
 
-A symlink connects it to `~/.nova/data/nova-brain`. Open the vault in Obsidian from any Apple device to view/edit N.O.V.A.'s knowledge graph.
+A symlink connects it to `~/.nova/data/nova-brain`. Open the vault in Obsidian from any Apple device to view/edit NOVA's knowledge graph.
 
 ### Manual iCloud setup (existing install)
 

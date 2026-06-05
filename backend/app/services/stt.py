@@ -1,5 +1,5 @@
 """
-N.O.V.A. STT — Local speech-to-text using faster-whisper.
+NOVA STT — Local speech-to-text using faster-whisper.
 Runs on CPU, no API key needed, supports Spanish and English.
 """
 
@@ -19,7 +19,7 @@ def _get_model() -> WhisperModel:
     if _model is None:
         logger.info("Loading Whisper model (base)...")
         t0 = time.time()
-        _model = WhisperModel("base", device="cpu", compute_type="int8")
+        _model = WhisperModel("small", device="cpu", compute_type="int8")
         logger.info(f"Whisper model loaded in {time.time()-t0:.1f}s")
     return _model
 
@@ -45,10 +45,18 @@ def transcribe_audio(
     if language_code and language_code.startswith("en"):
         lang = "en"
 
+    # Prompt biasing: helps Whisper distinguish "Nova" from "nueva", etc.
+    prompt_hint = {
+        "es": "Nova es la asistente virtual. Nova, Hypernova Labs, Salome.",
+        "en": "Nova is the virtual assistant. Nova, Hypernova Labs.",
+    }
+
     t0 = time.time()
     segments, info = model.transcribe(
         audio_stream,
         language=lang,
+        initial_prompt=prompt_hint.get(lang, prompt_hint["es"]),
+        beam_size=3,
         vad_filter=True,
         vad_parameters=dict(min_silence_duration_ms=500),
     )

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""N.O.V.A. Mac Client — Wake word + voice interaction with Silero VAD."""
+"""NOVA Mac Client — Wake word + voice interaction with Silero VAD."""
 
 import base64
 import io
@@ -72,7 +72,7 @@ def contains_wake_word(wav_bytes: bytes, wake_word: str) -> str:
 
 def main():
     logger.info("=" * 50)
-    logger.info("N.O.V.A. Mac Client (Silero VAD)")
+    logger.info("NOVA Mac Client (Silero VAD)")
     logger.info(f"Backend: {BACKEND_URL}")
     logger.info(f"Wake word: '{WAKE_WORD}'")
     logger.info("=" * 50)
@@ -117,7 +117,7 @@ def main():
 
     try:
         while True:
-            # Skip while N.O.V.A. is speaking
+            # Skip while NOVA is speaking
             if is_speaking.is_set():
                 time.sleep(0.05)
                 continue
@@ -149,7 +149,7 @@ def main():
                             response_text = result.get("response", "")
                             audio_b64 = result.get("audio_base64", "")
                             if response_text:
-                                logger.info(f"N.O.V.A.: {response_text[:100]}...")
+                                logger.info(f"NOVA: {response_text[:100]}...")
                             if audio_b64:
                                 play_audio(base64.b64decode(audio_b64))
                             last_interaction = time.time()
@@ -170,7 +170,7 @@ def main():
                         if transcript:
                             logger.info(f"You: {transcript}")
                         if response_text:
-                            logger.info(f"N.O.V.A.: {response_text[:100]}...")
+                            logger.info(f"NOVA: {response_text[:100]}...")
 
                         if audio_b64:
                             play_audio(base64.b64decode(audio_b64))

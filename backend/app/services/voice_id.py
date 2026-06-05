@@ -1,5 +1,5 @@
 """
-N.O.V.A. Voice ID — Speaker verification using voice embeddings.
+NOVA Voice ID — Speaker verification using voice embeddings.
 Learns the owner's voice and only responds to them.
 """
 

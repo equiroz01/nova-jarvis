@@ -118,7 +118,7 @@ function initArcTicks() {
     if (!container.querySelector('.arc-core')) {
       const label = document.createElement('div');
       label.className = 'arc-core' + (container.classList.contains('arc-reactor-sm') ? ' arc-core-sm' : '');
-      label.textContent = container.classList.contains('arc-reactor-sm') ? 'N' : 'N.O.V.A.';
+      label.textContent = container.classList.contains('arc-reactor-sm') ? 'N' : 'NOVA';
       container.appendChild(label);
     }
   });
