@@ -21,6 +21,7 @@ from app.tools.cloud.outlook_calendar_tool import get_outlook_events, create_out
 from app.tools.cloud.outlook_mail_tool import search_outlook_emails, send_outlook_email, get_unread_outlook_emails
 from app.tools.local.proxy import take_screenshot, read_screen_text, run_arp_scan
 from app.tools.cloud.task_tool import create_background_task
+from app.tools.cloud.agent_delegate_tool import delegate_to_agent
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,7 @@ CLOUD_TOOLS = [
     get_outlook_events, create_outlook_event,
     search_outlook_emails, send_outlook_email, get_unread_outlook_emails,
     create_background_task,
+    delegate_to_agent,
 ]
 
 LOCAL_TOOLS = [take_screenshot, read_screen_text, run_arp_scan]

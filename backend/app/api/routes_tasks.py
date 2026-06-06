@@ -19,6 +19,7 @@ class CreateTaskRequest(BaseModel):
     title: str
     description: str
     type: str = "general"
+    agent_name: Optional[str] = None
 
 
 @router.post("")
@@ -28,6 +29,7 @@ async def create_task(req: CreateTaskRequest, request: Request):
         title=req.title,
         description=req.description,
         type=req.type,
+        agent_name=req.agent_name,
     )
     task = await store.create(task_in)
 

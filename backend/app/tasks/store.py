@@ -44,10 +44,18 @@ async def init_db():
             created_at TEXT NOT NULL,
             started_at TEXT,
             completed_at TEXT,
-            session_id TEXT
+            session_id TEXT,
+            agent_name TEXT
         )
     """)
     await _db.commit()
+
+    # Migration: add agent_name column if missing
+    try:
+        await _db.execute("ALTER TABLE tasks ADD COLUMN agent_name TEXT")
+        await _db.commit()
+    except Exception:
+        pass  # Column already exists
 
     # Crash recovery: reset stuck running tasks to queued
     cursor = await _db.execute(
@@ -77,16 +85,17 @@ async def create(task_in: TaskCreate) -> Task:
         description=task_in.description,
         type=task_in.type,
         session_id=task_in.session_id,
+        agent_name=task_in.agent_name,
     )
     await _db.execute(
         """INSERT INTO tasks (id, type, title, description, status, progress,
-           progress_text, result, error, created_at, started_at, completed_at, session_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           progress_text, result, error, created_at, started_at, completed_at, session_id, agent_name)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             task.id, task.type.value, task.title, task.description,
             task.status.value, task.progress, task.progress_text,
             task.result, task.error, task.created_at,
-            task.started_at, task.completed_at, task.session_id,
+            task.started_at, task.completed_at, task.session_id, task.agent_name,
         ),
     )
     await _db.commit()
@@ -166,4 +175,5 @@ def _row_to_task(row) -> Task:
         started_at=row[10],
         completed_at=row[11],
         session_id=row[12],
+        agent_name=row[13] if len(row) > 13 else None,
     )

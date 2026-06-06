@@ -77,7 +77,14 @@ BACKGROUND TASKS:
 - After creating a task, confirm briefly: "Listo jefe, lo puse en cola. Le aviso cuando esté."
 - Do NOT try to do 10-minute work inline — dispatch it as a background task.
 - When asked about task status, direct them to /tasks or use general knowledge.
-- Task types: "research" for investigation, "code" for programming, "document" for writing, "general" for anything else."""
+- Task types: "research" for investigation, "code" for programming, "document" for writing, "agent" for Vertex AI delegation, "general" for anything else.
+
+VERTEX AI AGENTS (DELEGATION):
+- You have access to specialized AI agents deployed in Google Cloud.
+- Use `delegate_to_agent(agent_name, message)` for REAL-TIME queries to a specialist.
+- Use `create_background_task` with type="agent" for longer agent work.
+- When no specific agent is named, the system auto-routes to the best match.
+{vertex_agents_block}"""
 
 
 def _load_persona() -> dict:
@@ -189,6 +196,13 @@ def build_prompt() -> ChatPromptTemplate:
 
     persona_block = _build_persona_block(persona)
 
+    # Dynamic Vertex AI agent list
+    try:
+        from app.vertex_agents.registry import get_agent_descriptions
+        vertex_block = get_agent_descriptions()
+    except Exception:
+        vertex_block = ""
+
     prompt_text = SYSTEM_TEMPLATE.format(
         current_date=now.strftime("%B %d, %Y"),
         current_time=now.strftime("%I:%M %p"),
@@ -196,6 +210,7 @@ def build_prompt() -> ChatPromptTemplate:
         year=now.strftime("%Y"),
         timezone=tz_name,
         persona_block=persona_block,
+        vertex_agents_block=vertex_block,
     )
 
     return ChatPromptTemplate.from_messages(

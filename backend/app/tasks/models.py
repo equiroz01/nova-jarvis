@@ -28,6 +28,7 @@ class TaskCreate(BaseModel):
     description: str
     type: TaskType = TaskType.general
     session_id: Optional[str] = None
+    agent_name: Optional[str] = None
 
 
 class Task(BaseModel):
@@ -44,6 +45,7 @@ class Task(BaseModel):
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
     session_id: Optional[str] = None
+    agent_name: Optional[str] = None
 
 
 class TaskUpdate(BaseModel):

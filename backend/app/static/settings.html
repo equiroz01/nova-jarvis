@@ -225,6 +225,61 @@ select.form-input{cursor:pointer}
     <button class="btn" id="msRemoveBtn" onclick="msRemove()" style="display:none;border-color:rgba(255,23,68,0.3);color:var(--red)">REMOVE</button>
   </div>
 
+  <h2 class="section-title">VERTEX AI AGENTS</h2>
+  <div class="mcp-desc">Agentes especializados desplegados en Google Cloud. NOVA puede delegarles tareas en tiempo real o en background.</div>
+
+  <div class="mcp-list" id="agentList">
+    <div class="empty">NO AGENTS CONFIGURED</div>
+  </div>
+
+  <button class="add-btn" id="addAgentBtn" onclick="showAgentForm()">+ ADD AGENT</button>
+
+  <div class="add-form" id="agentForm" style="display:none">
+    <div class="form-row">
+      <div class="form-field">
+        <span class="form-label">NAME</span>
+        <input class="form-input" id="aName" placeholder="e.g. Data Analyst">
+      </div>
+      <div class="form-field">
+        <span class="form-label">AGENT ID</span>
+        <input class="form-input" id="aAgentId" placeholder="Dialogflow CX agent ID">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <span class="form-label">DESCRIPTION</span>
+        <input class="form-input" id="aDesc" placeholder="What this agent does">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <span class="form-label">PROJECT ID</span>
+        <input class="form-input" id="aProjId" value="gen-lang-client-0486673441">
+      </div>
+      <div class="form-field">
+        <span class="form-label">LOCATION</span>
+        <select class="form-input" id="aLocation">
+          <option value="us-central1">us-central1</option>
+          <option value="us-east1">us-east1</option>
+          <option value="us-west1">us-west1</option>
+          <option value="europe-west1">europe-west1</option>
+          <option value="asia-southeast1">asia-southeast1</option>
+          <option value="global">global</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <span class="form-label">SPECIALTIES (comma-separated)</span>
+        <input class="form-input" id="aSpecs" placeholder="data, analysis, SQL, metrics">
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn btn-primary" onclick="saveAgent()">SAVE AGENT</button>
+      <button class="btn" onclick="hideAgentForm()">CANCEL</button>
+    </div>
+  </div>
+
   <h2 class="section-title">MCP SERVERS</h2>
 
   <div class="presets" id="presets">
@@ -780,6 +835,135 @@ async function msRemove() {
 }
 
 msLoadStatus();
+
+// ── Vertex AI Agents ──
+
+async function loadAgents() {
+  try {
+    const r = await fetch(API + '/api/settings/agents');
+    const data = await r.json();
+    renderAgents(data.agents || []);
+  } catch (e) {
+    console.error('Load agents error:', e);
+  }
+}
+
+function renderAgents(agents) {
+  const list = document.getElementById('agentList');
+  list.replaceChildren();
+  if (!agents.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.textContent = 'NO AGENTS CONFIGURED';
+    list.appendChild(empty);
+    return;
+  }
+  agents.forEach(a => {
+    const card = document.createElement('div');
+    card.className = 'mcp-card';
+
+    const toggle = document.createElement('div');
+    toggle.className = 'mcp-toggle' + (a.enabled ? ' on' : '');
+    toggle.addEventListener('click', () => toggleAgent(a.name));
+
+    const info = document.createElement('div');
+    info.className = 'mcp-info';
+    const name = document.createElement('div');
+    name.className = 'mcp-name';
+    name.textContent = a.name;
+    const meta = document.createElement('div');
+    meta.className = 'mcp-meta';
+    const specs = (a.specialties || []).join(', ');
+    meta.textContent = (a.description || '') + ' | ' + a.location + (specs ? ' | ' + specs : '');
+    info.appendChild(name);
+    info.appendChild(meta);
+
+    const actions = document.createElement('div');
+    actions.style.cssText = 'display:flex;gap:6px;margin-left:auto';
+
+    const testBtn = document.createElement('button');
+    testBtn.className = 'btn';
+    testBtn.textContent = 'TEST';
+    testBtn.style.cssText = 'padding:2px 8px;font-size:10px';
+    testBtn.addEventListener('click', () => testAgentConn(a.name));
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'mcp-delete';
+    delBtn.textContent = 'x';
+    delBtn.addEventListener('click', () => deleteAgent(a.name));
+
+    actions.appendChild(testBtn);
+    actions.appendChild(delBtn);
+
+    card.appendChild(toggle);
+    card.appendChild(info);
+    card.appendChild(actions);
+    list.appendChild(card);
+  });
+}
+
+async function toggleAgent(name) {
+  await fetch(API + '/api/settings/agents/' + encodeURIComponent(name) + '/toggle', {method: 'PATCH'});
+  loadAgents();
+}
+
+async function deleteAgent(name) {
+  await fetch(API + '/api/settings/agents/' + encodeURIComponent(name), {method: 'DELETE'});
+  loadAgents();
+}
+
+async function testAgentConn(name) {
+  const r = await fetch(API + '/api/settings/agents/test/' + encodeURIComponent(name), {method: 'POST'});
+  const data = await r.json();
+  alert((data.ok ? 'OK: ' : 'ERROR: ') + data.message);
+}
+
+function showAgentForm() {
+  document.getElementById('agentForm').style.display = 'block';
+  document.getElementById('addAgentBtn').style.display = 'none';
+}
+
+function hideAgentForm() {
+  document.getElementById('agentForm').style.display = 'none';
+  document.getElementById('addAgentBtn').style.display = '';
+}
+
+async function saveAgent() {
+  const name = document.getElementById('aName').value.trim();
+  const agentId = document.getElementById('aAgentId').value.trim();
+  if (!name || !agentId) { alert('Name and Agent ID required'); return; }
+
+  const agent = {
+    name: name,
+    description: document.getElementById('aDesc').value.trim(),
+    agent_id: agentId,
+    project_id: document.getElementById('aProjId').value.trim(),
+    location: document.getElementById('aLocation').value,
+    specialties: document.getElementById('aSpecs').value.split(',').map(s => s.trim()).filter(Boolean),
+    enabled: true,
+  };
+
+  const r = await fetch(API + '/api/settings/agents/add', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(agent),
+  });
+
+  if (r.ok) {
+    hideAgentForm();
+    loadAgents();
+    // Clear form
+    document.getElementById('aName').value = '';
+    document.getElementById('aAgentId').value = '';
+    document.getElementById('aDesc').value = '';
+    document.getElementById('aSpecs').value = '';
+  } else {
+    const err = await r.json();
+    alert('Error: ' + (err.detail || 'Failed'));
+  }
+}
+
+loadAgents();
 </script>
 </body>
 </html>

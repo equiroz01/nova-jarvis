@@ -160,6 +160,9 @@ class TaskRunner:
             elif task.type == TaskType.code:
                 from .workers.code import code_worker
                 result = await code_worker(task, _update_and_broadcast)
+            elif task.type == TaskType.agent:
+                from .workers.agent import agent_worker
+                result = await agent_worker(task, _update_and_broadcast)
             else:
                 result = await self._run_with_agent(task)
         except NotImplementedError:

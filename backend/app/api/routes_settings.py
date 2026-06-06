@@ -1,4 +1,4 @@
-"""Settings API — manage MCP servers, Voice ID, AgilityTask and NOVA configuration."""
+"""Settings API — manage MCP servers, Voice ID, AgilityTask, Vertex AI Agents and NOVA configuration."""
 
 import json
 import yaml
@@ -348,3 +348,71 @@ async def keychain_import_all():
     results.update(keychain.import_from_mcp_config())
     results.update(keychain.import_from_agilitytask())
     return {"imported": results, "total": sum(1 for v in results.values() if v)}
+
+
+# ── Vertex AI Agents ──
+
+class VertexAgentRequest(BaseModel):
+    name: str
+    description: str = ""
+    agent_id: str
+    project_id: str = "gen-lang-client-0486673441"
+    location: str = "us-central1"
+    specialties: list[str] = []
+    enabled: bool = True
+
+
+@router.get("/agents")
+async def list_agents():
+    """List all Vertex AI agents."""
+    from app.vertex_agents.registry import load_agents
+    return {"agents": load_agents()}
+
+
+@router.post("/agents/add")
+async def add_agent(req: VertexAgentRequest):
+    """Add a new Vertex AI agent."""
+    from app.vertex_agents.registry import load_agents, save_agents
+    agents = load_agents()
+    # Check duplicate
+    if any(a["name"].lower() == req.name.lower() for a in agents):
+        raise HTTPException(400, f"Agent '{req.name}' already exists")
+    agents.append(req.model_dump())
+    save_agents(agents)
+    return {"status": "added", "agent": req.model_dump()}
+
+
+@router.delete("/agents/{name}")
+async def delete_agent(name: str):
+    """Delete a Vertex AI agent."""
+    from app.vertex_agents.registry import load_agents, save_agents
+    agents = load_agents()
+    filtered = [a for a in agents if a["name"].lower() != name.lower()]
+    if len(filtered) == len(agents):
+        raise HTTPException(404, f"Agent '{name}' not found")
+    save_agents(filtered)
+    return {"status": "deleted"}
+
+
+@router.patch("/agents/{name}/toggle")
+async def toggle_agent(name: str):
+    """Toggle a Vertex AI agent enabled/disabled."""
+    from app.vertex_agents.registry import load_agents, save_agents
+    agents = load_agents()
+    for a in agents:
+        if a["name"].lower() == name.lower():
+            a["enabled"] = not a.get("enabled", True)
+            save_agents(agents)
+            return {"status": "toggled", "enabled": a["enabled"]}
+    raise HTTPException(404, f"Agent '{name}' not found")
+
+
+@router.post("/agents/test/{name}")
+async def test_agent(name: str):
+    """Test connectivity to a Vertex AI agent."""
+    from app.vertex_agents.registry import find_agent_by_name
+    from app.vertex_agents.client import test_agent as _test
+    agent = find_agent_by_name(name)
+    if not agent:
+        raise HTTPException(404, f"Agent '{name}' not found")
+    return _test(agent)

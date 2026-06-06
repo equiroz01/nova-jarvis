@@ -1,0 +1,3 @@
+# Vertex AI Agents — registered agents that NOVA can delegate to.
+# Add your agents here or via the Settings UI at /settings.
+agents: []
