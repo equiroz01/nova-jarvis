@@ -1,7 +1,8 @@
-// tasks.js — Background task monitoring via SSE
+// tasks.js — Background task badge monitoring via SSE
 
 let API;
 let _evtSource = null;
+let _debounce = null;
 
 function updateBadge(count) {
   const badge = document.getElementById('taskBadge');
@@ -17,34 +18,25 @@ function updateBadge(count) {
 async function fetchActiveTasks() {
   try {
     const r = await fetch(API + '/api/tasks?status=running');
-    const tasks = await r.json();
-    const queued = await fetch(API + '/api/tasks?status=queued');
-    const queuedTasks = await queued.json();
-    updateBadge(tasks.length + queuedTasks.length);
+    const running = await r.json();
+    const q = await fetch(API + '/api/tasks?status=queued');
+    const queued = await q.json();
+    updateBadge(running.length + queued.length);
   } catch (e) {
     // Silent fail
   }
 }
 
+function debouncedFetch() {
+  if (_debounce) clearTimeout(_debounce);
+  _debounce = setTimeout(fetchActiveTasks, 300);
+}
+
 function connectSSE() {
   if (_evtSource) _evtSource.close();
   _evtSource = new EventSource(API + '/api/tasks/stream');
-
-  _evtSource.onmessage = (e) => {
-    try {
-      const data = JSON.parse(e.data);
-      if (data.type === 'task_update' || data.type === 'task_created') {
-        fetchActiveTasks();
-      } else if (data.type === 'task_complete' || data.type === 'task_failed' || data.type === 'task_cancelled') {
-        fetchActiveTasks();
-      }
-    } catch (err) {
-      // ignore parse errors
-    }
-  };
-
+  _evtSource.onmessage = () => debouncedFetch();
   _evtSource.onerror = () => {
-    // Reconnect after 5s
     _evtSource.close();
     setTimeout(connectSSE, 5000);
   };

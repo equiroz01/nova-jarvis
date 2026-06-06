@@ -14,6 +14,25 @@ logger = logging.getLogger(__name__)
 
 _thread_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="task-worker")
 
+# Max execution time per task (10 minutes)
+TASK_TIMEOUT_S = 600
+
+
+async def _safe_broadcast(event: dict):
+    """Broadcast without propagating errors."""
+    try:
+        await broadcast(event)
+    except Exception as e:
+        logger.warning(f"Broadcast failed: {e}")
+
+
+async def _update_and_broadcast(task_id: str, event_type: str, **fields):
+    """Update store and broadcast in one step, with null safety."""
+    await store.update(task_id, **fields)
+    task = await store.get(task_id)
+    if task:
+        await _safe_broadcast({"type": event_type, "task": task.model_dump()})
+
 
 class TaskRunner:
     """Background task runner with configurable concurrency."""
@@ -36,7 +55,6 @@ class TaskRunner:
         if queued:
             logger.info(f"TaskRunner: loaded {len(queued)} queued task(s)")
 
-        # Spawn workers
         for i in range(self.max_concurrent):
             worker = asyncio.create_task(self._worker(i))
             self._workers.append(worker)
@@ -46,15 +64,10 @@ class TaskRunner:
     async def stop(self):
         """Gracefully stop all workers."""
         self._running = False
-
-        # Cancel running tasks
         for task_id, atask in self._running_tasks.items():
             atask.cancel()
-
-        # Cancel workers
         for w in self._workers:
             w.cancel()
-
         await asyncio.gather(*self._workers, return_exceptions=True)
         self._workers.clear()
         self._running_tasks.clear()
@@ -69,15 +82,12 @@ class TaskRunner:
         """Cancel a running task."""
         if task_id in self._running_tasks:
             self._running_tasks[task_id].cancel()
-            await store.update(
-                task_id,
-                status=TaskStatus.cancelled,
-                completed_at=datetime.now(timezone.utc).isoformat(),
+            now = datetime.now(timezone.utc).isoformat()
+            await _update_and_broadcast(
+                task_id, "task_cancelled",
+                status=TaskStatus.cancelled, completed_at=now,
             )
-            task = await store.get(task_id)
-            if task:
-                await broadcast({"type": "task_cancelled", "task": task.model_dump()})
-            del self._running_tasks[task_id]
+            self._running_tasks.pop(task_id, None)
             logger.info(f"TaskRunner: task {task_id[:8]} cancelled")
             return True
         return False
@@ -99,29 +109,36 @@ class TaskRunner:
 
             # Mark as running
             now = datetime.now(timezone.utc).isoformat()
-            await store.update(task_id, status=TaskStatus.running, started_at=now)
-            task = await store.get(task_id)
-            await broadcast({"type": "task_update", "task": task.model_dump()})
+            await _update_and_broadcast(
+                task_id, "task_update",
+                status=TaskStatus.running, started_at=now,
+            )
 
-            # Execute in a tracked asyncio task
+            # Execute with timeout
             exec_task = asyncio.create_task(self._execute_task(task_id))
             self._running_tasks[task_id] = exec_task
 
             try:
-                await exec_task
+                await asyncio.wait_for(exec_task, timeout=TASK_TIMEOUT_S)
+            except asyncio.TimeoutError:
+                logger.error(f"Task {task_id[:8]} timed out after {TASK_TIMEOUT_S}s")
+                exec_task.cancel()
+                now = datetime.now(timezone.utc).isoformat()
+                await _update_and_broadcast(
+                    task_id, "task_failed",
+                    status=TaskStatus.failed,
+                    error=f"Task timed out after {TASK_TIMEOUT_S}s",
+                    completed_at=now,
+                )
             except asyncio.CancelledError:
                 logger.info(f"Task {task_id[:8]} was cancelled")
             except Exception as e:
                 logger.error(f"Task {task_id[:8]} failed: {e}", exc_info=True)
-                await store.update(
-                    task_id,
-                    status=TaskStatus.failed,
-                    error=str(e),
-                    completed_at=datetime.now(timezone.utc).isoformat(),
+                now = datetime.now(timezone.utc).isoformat()
+                await _update_and_broadcast(
+                    task_id, "task_failed",
+                    status=TaskStatus.failed, error=str(e), completed_at=now,
                 )
-                task = await store.get(task_id)
-                if task:
-                    await broadcast({"type": "task_failed", "task": task.model_dump()})
             finally:
                 self._running_tasks.pop(task_id, None)
 
@@ -133,39 +150,24 @@ class TaskRunner:
 
         logger.info(f"Executing task {task_id[:8]}: {task.title} (type={task.type})")
 
-        try:
-            # Phase 1: all types use the general agent executor
-            result = await self._run_with_agent(task)
+        result = await self._run_with_agent(task)
 
-            await store.update(
-                task_id,
-                status=TaskStatus.completed,
-                progress=100,
-                progress_text="Completed",
-                result=result,
-                completed_at=datetime.now(timezone.utc).isoformat(),
-            )
-            task = await store.get(task_id)
-            await broadcast({"type": "task_complete", "task": task.model_dump()})
-            logger.info(f"Task {task_id[:8]} completed successfully")
-
-        except asyncio.CancelledError:
-            raise
-        except Exception as e:
-            raise
+        now = datetime.now(timezone.utc).isoformat()
+        await _update_and_broadcast(
+            task_id, "task_complete",
+            status=TaskStatus.completed, progress=100,
+            progress_text="Completed", result=result, completed_at=now,
+        )
+        logger.info(f"Task {task_id[:8]} completed successfully")
 
     async def _run_with_agent(self, task) -> str:
         """Run a task using the existing LangChain agent executor."""
         from app.agent.orchestrator import invoke_agent
 
-        # Update progress
-        await store.update(task.id, progress=10, progress_text="Starting agent...")
-        await broadcast({
-            "type": "task_update",
-            "task": (await store.get(task.id)).model_dump(),
-        })
+        await _update_and_broadcast(
+            task.id, "task_update", progress=10, progress_text="Starting agent...",
+        )
 
-        # Build a detailed prompt for the agent
         prompt = (
             f"BACKGROUND TASK — work autonomously until done.\n"
             f"Title: {task.title}\n"
@@ -174,15 +176,12 @@ class TaskRunner:
             f"Search the web, check your brain/memory, and be thorough."
         )
 
-        # Run agent in thread pool (blocking call)
         loop = asyncio.get_event_loop()
         session_id = f"task-{task.id[:8]}"
 
-        await store.update(task.id, progress=30, progress_text="Agent working...")
-        await broadcast({
-            "type": "task_update",
-            "task": (await store.get(task.id)).model_dump(),
-        })
+        await _update_and_broadcast(
+            task.id, "task_update", progress=30, progress_text="Agent working...",
+        )
 
         t0 = time.time()
         result = await loop.run_in_executor(
@@ -190,11 +189,9 @@ class TaskRunner:
         )
         elapsed = time.time() - t0
 
-        await store.update(task.id, progress=90, progress_text="Finalizing...")
-        await broadcast({
-            "type": "task_update",
-            "task": (await store.get(task.id)).model_dump(),
-        })
+        await _update_and_broadcast(
+            task.id, "task_update", progress=90, progress_text="Finalizing...",
+        )
 
         logger.info(f"Task {task.id[:8]} agent finished in {elapsed:.1f}s")
         return result

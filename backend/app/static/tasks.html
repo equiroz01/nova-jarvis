@@ -155,15 +155,21 @@ body{background:var(--bg);color:var(--text);font-family:'Rajdhani',sans-serif;mi
 const API = window.location.origin;
 let evtSource = null;
 
+let _loadDebounce = null;
+
 async function loadTasks() {
   try {
     const r = await fetch(API + '/api/tasks');
     const tasks = await r.json();
     renderTasks(tasks);
-    connectSSE();
   } catch (e) {
     console.error('Failed to load tasks:', e);
   }
+}
+
+function debouncedLoad() {
+  if (_loadDebounce) clearTimeout(_loadDebounce);
+  _loadDebounce = setTimeout(loadTasks, 300);
 }
 
 function el(tag, attrs, children) {
@@ -293,7 +299,7 @@ async function deleteTask(id) {
 function connectSSE() {
   if (evtSource) evtSource.close();
   evtSource = new EventSource(API + '/api/tasks/stream');
-  evtSource.onmessage = () => loadTasks();
+  evtSource.onmessage = () => debouncedLoad();
   evtSource.onerror = () => {
     evtSource.close();
     setTimeout(connectSSE, 5000);
@@ -301,6 +307,7 @@ function connectSSE() {
 }
 
 loadTasks();
+connectSSE();
 </script>
 </body>
 </html>

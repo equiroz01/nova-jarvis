@@ -46,10 +46,10 @@ async def lifespan(app: FastAPI):
     from app.tasks import store as task_store
     from app.tasks.runner import TaskRunner
     from app.tools.cloud.task_tool import set_loop as set_task_loop
-    set_task_loop(asyncio.get_event_loop())
     await task_store.init_db()
     app.state.task_runner = TaskRunner(max_concurrent=2)
     await app.state.task_runner.start()
+    set_task_loop(asyncio.get_event_loop(), app.state.task_runner)
     logger.info("Task runner started.")
 
     yield

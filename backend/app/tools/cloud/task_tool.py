@@ -6,13 +6,15 @@ from langchain.tools import tool
 
 logger = logging.getLogger(__name__)
 
-# Reference to the main event loop — set by main.py during startup
+# References set by main.py during startup — avoids circular imports
 _main_loop: asyncio.AbstractEventLoop = None
+_task_runner = None
 
 
-def set_loop(loop: asyncio.AbstractEventLoop):
-    global _main_loop
+def set_loop(loop: asyncio.AbstractEventLoop, runner=None):
+    global _main_loop, _task_runner
     _main_loop = loop
+    _task_runner = runner
 
 
 @tool
@@ -41,28 +43,26 @@ def create_background_task(title: str, description: str, task_type: str = "gener
             type=task_type,
         )
 
-        if _main_loop and _main_loop.is_running():
-            # Create task in DB
-            future = asyncio.run_coroutine_threadsafe(
-                store.create(task_in), _main_loop
-            )
-            task = future.result(timeout=10)
-
-            # Submit to runner — get it from the FastAPI app state
-            # We need to import at runtime to avoid circular imports
-            async def _submit():
-                from app.main import app
-                await app.state.task_runner.submit(task.id)
-
-            asyncio.run_coroutine_threadsafe(_submit(), _main_loop).result(timeout=5)
-
-            return (
-                f"Tarea creada: **{task.title}** (ID: {task.id[:8]})\n"
-                f"Tipo: {task.type} | Estado: en cola\n"
-                f"Se ejecutará en background. El usuario puede ver el progreso en /tasks."
-            )
-        else:
+        if not (_main_loop and _main_loop.is_running()):
             return "Error: no se pudo crear la tarea (event loop no disponible)"
+
+        # Create task in DB
+        future = asyncio.run_coroutine_threadsafe(
+            store.create(task_in), _main_loop
+        )
+        task = future.result(timeout=10)
+
+        # Submit to runner
+        if _task_runner:
+            asyncio.run_coroutine_threadsafe(
+                _task_runner.submit(task.id), _main_loop
+            ).result(timeout=5)
+
+        return (
+            f"Tarea creada: **{task.title}** (ID: {task.id[:8]})\n"
+            f"Tipo: {task.type} | Estado: en cola\n"
+            f"Se ejecutará en background. El usuario puede ver el progreso en /tasks."
+        )
 
     except Exception as e:
         logger.error(f"Error creating background task: {e}", exc_info=True)
