@@ -32,5 +32,5 @@ waveform.init();             // arc reactor + waveform bars
 fillers.init(config);        // filler phrases + greeting pre-cache
 voice.init(config);          // push-to-talk recording
 chat.init(config);           // text input + streaming
-handsfree.init(config);      // VAD + wake word
+handsfree.init(config);      // VAD + always-on voice
 tasks.init(config);          // background task badge + SSE

@@ -1,7 +1,6 @@
-// handsfree.js — VAD, wake word NOVA, interrupt
-// Bug fixes applied:
+// handsfree.js — VAD, always-on voice, interrupt
+// - No wake word needed — always listening when active
 // - Do NOT auto-start without user gesture. Show HF UI but require click to activate mic.
-// - Wake word detection sends /voice only ONCE — reuse the response, don't call twice.
 
 import bus from './eventbus.js';
 import { addMessage, hideWelcome } from './messages.js';

@@ -17,7 +17,7 @@ _model: WhisperModel = None
 def _get_model() -> WhisperModel:
     global _model
     if _model is None:
-        logger.info("Loading Whisper model (base)...")
+        logger.info("Loading Whisper model (small)...")
         t0 = time.time()
         _model = WhisperModel("small", device="cpu", compute_type="int8")
         logger.info(f"Whisper model loaded in {time.time()-t0:.1f}s")
