@@ -11,6 +11,7 @@ import * as fillers from './fillers.js';
 import * as voice from './voice.js';
 import * as chat from './chat.js';
 import * as handsfree from './handsfree.js';
+import * as tasks from './tasks.js';
 
 const API = window.location.origin;
 const sessionId = 'web-' + crypto.randomUUID().slice(0, 8);
@@ -32,3 +33,4 @@ fillers.init(config);        // filler phrases + greeting pre-cache
 voice.init(config);          // push-to-talk recording
 chat.init(config);           // text input + streaming
 handsfree.init(config);      // VAD + wake word
+tasks.init(config);          // background task badge + SSE

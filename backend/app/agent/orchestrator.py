@@ -20,6 +20,7 @@ from app.tools.cloud.agilitytask_tool import (
 from app.tools.cloud.outlook_calendar_tool import get_outlook_events, create_outlook_event
 from app.tools.cloud.outlook_mail_tool import search_outlook_emails, send_outlook_email, get_unread_outlook_emails
 from app.tools.local.proxy import take_screenshot, read_screen_text, run_arp_scan
+from app.tools.cloud.task_tool import create_background_task
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ CLOUD_TOOLS = [
     create_task, update_task, get_team_members,
     get_outlook_events, create_outlook_event,
     search_outlook_emails, send_outlook_email, get_unread_outlook_emails,
+    create_background_task,
 ]
 
 LOCAL_TOOLS = [take_screenshot, read_screen_text, run_arp_scan]
@@ -75,6 +77,7 @@ def _get_executor() -> AgentExecutor:
             verbose=True,
             handle_parsing_errors=True,
             max_iterations=5,
+            max_execution_time=120,
         )
         _executor_minute = now_minute
         logger.debug(f"Executor refreshed: {len(ALL_TOOLS)} built-in + {len(mcp_tools)} MCP tools")
@@ -164,9 +167,20 @@ def _prefetch_briefing() -> str:
         f_mail = pool.submit(_emails)
         f_brain = pool.submit(_brain)
 
-        cal = f_cal.result(timeout=15)
-        mail = f_mail.result(timeout=15)
-        brain = f_brain.result(timeout=5)
+        try:
+            cal = f_cal.result(timeout=25)
+        except (TimeoutError, Exception) as e:
+            logger.warning(f"Calendar prefetch failed: {e}")
+            cal = "Calendario no disponible temporalmente."
+        try:
+            mail = f_mail.result(timeout=25)
+        except (TimeoutError, Exception) as e:
+            logger.warning(f"Mail prefetch failed: {e}")
+            mail = "Correos no disponibles temporalmente."
+        try:
+            brain = f_brain.result(timeout=5)
+        except (TimeoutError, Exception) as e:
+            brain = ""
 
     parts = [
         "BRIEFING DATA (pre-fetched, use this to respond — do NOT call these tools again):",

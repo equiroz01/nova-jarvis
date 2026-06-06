@@ -15,8 +15,10 @@ def search_outlook_emails(query: str, max_results: int = 5) -> str:
         from app.services.microsoft_auth import graph_request
 
         # $search does not support $orderby — Graph returns by relevance
+        # Strip inner quotes to avoid $search syntax errors
+        safe_query = query.replace('"', '').replace("'", '')
         endpoint = (
-            f"me/messages?$search=\"{query}\""
+            f"me/messages?$search=\"{safe_query}\""
             f"&$top={max_results}"
             f"&$select=subject,from,receivedDateTime,bodyPreview,isRead,webLink"
         )

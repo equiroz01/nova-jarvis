@@ -16,6 +16,7 @@ from app.api.routes_alexa import router as alexa_router
 from app.api.routes_stream import router as stream_router
 from app.api.websocket_bridge import router as ws_router
 from app.api.routes_settings import router as settings_router
+from app.api.routes_tasks import router as tasks_router
 
 
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
@@ -40,7 +41,22 @@ async def lifespan(app: FastAPI):
     from app.services.filler_cache import preload_fillers
     asyncio.create_task(preload_fillers())
     logger.info("Filler phrases caching in background...")
+
+    # Background task system
+    from app.tasks import store as task_store
+    from app.tasks.runner import TaskRunner
+    from app.tools.cloud.task_tool import set_loop as set_task_loop
+    set_task_loop(asyncio.get_event_loop())
+    await task_store.init_db()
+    app.state.task_runner = TaskRunner(max_concurrent=2)
+    await app.state.task_runner.start()
+    logger.info("Task runner started.")
+
     yield
+
+    # Shutdown
+    await app.state.task_runner.stop()
+    await task_store.close_db()
     logger.info("Jarvis backend shutting down...")
 
 
@@ -108,6 +124,7 @@ app.include_router(alexa_router)
 app.include_router(stream_router)
 app.include_router(ws_router)
 app.include_router(settings_router)
+app.include_router(tasks_router)
 
 # Serve frontend
 STATIC_DIR = Path(__file__).parent / "static"
@@ -122,3 +139,8 @@ async def serve_ui():
 @app.get("/settings")
 async def serve_settings():
     return FileResponse(STATIC_DIR / "settings.html")
+
+
+@app.get("/tasks")
+async def serve_tasks():
+    return FileResponse(STATIC_DIR / "tasks.html")

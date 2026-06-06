@@ -8,6 +8,9 @@ import json
 import logging
 import yaml
 from pathlib import Path
+
+# Reference to the main event loop — set during initialize_mcp_servers()
+_main_loop: asyncio.AbstractEventLoop = None
 from typing import Optional
 from langchain.tools import StructuredTool
 from pydantic import BaseModel, Field, create_model
@@ -167,17 +170,16 @@ def _make_langchain_tool(connection: MCPConnection, mcp_tool) -> StructuredTool:
         InputModel = create_model(f"{tool_name}_input", query=(str, Field(default="", description="Input")))
 
     def _call_sync(**kwargs):
+        """Call MCP tool from sync context by scheduling on the main event loop."""
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as pool:
-                    future = pool.submit(asyncio.run, connection.call_tool(mcp_tool.name, kwargs))
-                    return future.result(timeout=30)
+            coro = connection.call_tool(mcp_tool.name, kwargs)
+            if _main_loop and _main_loop.is_running():
+                future = asyncio.run_coroutine_threadsafe(coro, _main_loop)
+                return future.result(timeout=30)
             else:
-                return loop.run_until_complete(connection.call_tool(mcp_tool.name, kwargs))
-        except RuntimeError:
-            return asyncio.run(connection.call_tool(mcp_tool.name, kwargs))
+                return asyncio.run(coro)
+        except Exception as e:
+            return f"MCP tool error [{connection.name}/{mcp_tool.name}]: {e}"
 
     return StructuredTool(
         name=tool_name,
@@ -194,7 +196,8 @@ _mcp_tools: list[StructuredTool] = []
 
 async def initialize_mcp_servers():
     """Load config, connect to enabled servers, and build tools."""
-    global _connections, _mcp_tools
+    global _connections, _mcp_tools, _main_loop
+    _main_loop = asyncio.get_event_loop()
 
     # Disconnect existing
     for c in _connections:
