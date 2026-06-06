@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 from . import store
-from .models import TaskStatus
+from .models import TaskStatus, TaskType
 from .notifications import broadcast
 
 logger = logging.getLogger(__name__)
@@ -143,14 +143,28 @@ class TaskRunner:
                 self._running_tasks.pop(task_id, None)
 
     async def _execute_task(self, task_id: str):
-        """Execute a task based on its type."""
+        """Execute a task, dispatching to specialized workers by type."""
         task = await store.get(task_id)
         if not task:
             return
 
         logger.info(f"Executing task {task_id[:8]}: {task.title} (type={task.type})")
 
-        result = await self._run_with_agent(task)
+        try:
+            if task.type == TaskType.research:
+                from .workers.research import research_worker
+                result = await research_worker(task, _update_and_broadcast)
+            elif task.type == TaskType.document:
+                from .workers.document import document_worker
+                result = await document_worker(task, _update_and_broadcast)
+            elif task.type == TaskType.code:
+                from .workers.code import code_worker
+                result = await code_worker(task, _update_and_broadcast)
+            else:
+                result = await self._run_with_agent(task)
+        except NotImplementedError:
+            logger.info(f"Worker for {task.type} not ready, using agent fallback")
+            result = await self._run_with_agent(task)
 
         now = datetime.now(timezone.utc).isoformat()
         await _update_and_broadcast(

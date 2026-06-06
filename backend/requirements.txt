@@ -26,6 +26,7 @@ edge-tts>=6.1.0
 
 # Background tasks
 aiosqlite>=0.20.0
+python-docx>=1.1.0
 
 # Tools
 ddgs>=7.0.0
