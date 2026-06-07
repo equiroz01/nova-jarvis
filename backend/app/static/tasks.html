@@ -198,7 +198,10 @@ function buildTaskCard(t) {
   card.appendChild(header);
 
   // Meta
-  card.appendChild(el('div', {className: 'task-meta'}, t.type.toUpperCase() + ' \u00B7 ' + elapsed));
+  var metaText = t.type.toUpperCase();
+  if (t.agent_name) metaText += ' (' + t.agent_name + ')';
+  metaText += ' \u00B7 ' + elapsed;
+  card.appendChild(el('div', {className: 'task-meta'}, metaText));
 
   // Progress bar (for active tasks)
   if (t.status === 'running' || t.status === 'queued') {
