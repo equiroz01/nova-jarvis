@@ -158,3 +158,72 @@ def test_agent(agent_config: dict) -> dict:
         }
     except Exception as e:
         return {"ok": False, "message": str(e)}
+
+
+def discover_agent(agent_config: dict) -> dict:
+    """Interview an agent to discover its capabilities.
+
+    Sends discovery questions and returns structured info:
+    {description, specialties, routing_prompt, raw_responses}
+    """
+    session_id = "nova-discovery"
+    discovery = {"raw_responses": []}
+
+    # Question 1: What do you do?
+    r1 = detect_intent(
+        agent_config, session_id,
+        "Describe briefly what you do, what topics you handle, and what type of questions you can answer. Be specific.",
+        language="es",
+    )
+    discovery["raw_responses"].append(r1)
+
+    # Question 2: What are your limitations?
+    r2 = detect_intent(
+        agent_config, session_id,
+        "What can you NOT do? What questions should NOT be sent to you? Be specific about your limitations.",
+        language="es",
+    )
+    discovery["raw_responses"].append(r2)
+
+    # Question 3: Example use cases
+    r3 = detect_intent(
+        agent_config, session_id,
+        "Give me 3-5 example questions or tasks that you handle best.",
+        language="es",
+    )
+    discovery["raw_responses"].append(r3)
+
+    # Now use LLM to structure the discovery into registry fields
+    from app.tasks.workers.base import _llm_call, parse_json_response
+
+    synthesis_prompt = (
+        f"An AI agent named '{agent_config.get('name', 'Unknown')}' was interviewed.\n\n"
+        f"What it does:\n{r1}\n\n"
+        f"What it cannot do:\n{r2}\n\n"
+        f"Example use cases:\n{r3}\n\n"
+        f"Based on this, generate a JSON object with:\n"
+        f'{{"description": "one sentence describing what it does (in Spanish)",\n'
+        f'"specialties": ["keyword1", "keyword2", ...] (8-12 lowercase keywords for matching),\n'
+        f'"routing_prompt": "When to use this agent and when NOT to use it (in Spanish, 2-3 sentences)"}}\n\n'
+        f"Return ONLY the JSON object."
+    )
+
+    try:
+        result = _llm_call(synthesis_prompt)
+        parsed = parse_json_response(result)
+        if isinstance(parsed, dict):
+            discovery["description"] = parsed.get("description", "")
+            discovery["specialties"] = parsed.get("specialties", [])
+            discovery["routing_prompt"] = parsed.get("routing_prompt", "")
+        else:
+            # Fallback: use raw response as description
+            discovery["description"] = r1[:200] if not r1.startswith("Error:") else ""
+            discovery["specialties"] = []
+            discovery["routing_prompt"] = ""
+    except Exception as e:
+        logger.warning(f"Discovery synthesis failed: {e}")
+        discovery["description"] = r1[:200] if not r1.startswith("Error:") else ""
+        discovery["specialties"] = []
+        discovery["routing_prompt"] = ""
+
+    return discovery

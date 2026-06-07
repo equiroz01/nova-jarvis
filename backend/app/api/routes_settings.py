@@ -359,6 +359,7 @@ class VertexAgentRequest(BaseModel):
     project_id: str = "gen-lang-client-0486673441"
     location: str = "us-central1"
     specialties: list[str] = []
+    routing_prompt: str = ""
     enabled: bool = True
 
 
@@ -371,15 +372,63 @@ async def list_agents():
 
 @router.post("/agents/add")
 async def add_agent(req: VertexAgentRequest):
-    """Add a new Vertex AI agent."""
+    """Add a new Vertex AI agent. Auto-discovers capabilities by interviewing the agent."""
     from app.vertex_agents.registry import load_agents, save_agents
+    from app.vertex_agents.client import discover_agent
+
     agents = load_agents()
-    # Check duplicate
     if any(a["name"].lower() == req.name.lower() for a in agents):
         raise HTTPException(400, f"Agent '{req.name}' already exists")
-    agents.append(req.model_dump())
+
+    agent_data = req.model_dump()
+
+    # Auto-discover: interview the agent to learn what it does
+    try:
+        discovery = discover_agent(agent_data)
+
+        # Fill in missing fields from discovery (don't overwrite user-provided values)
+        if not agent_data.get("description") and discovery.get("description"):
+            agent_data["description"] = discovery["description"]
+        if not agent_data.get("specialties") and discovery.get("specialties"):
+            agent_data["specialties"] = discovery["specialties"]
+        if not agent_data.get("routing_prompt") and discovery.get("routing_prompt"):
+            agent_data["routing_prompt"] = discovery["routing_prompt"]
+
+        # Save to brain for long-term memory
+        try:
+            from app.knowledge.brain import save_note
+            brain_content = (
+                f"## Agent: {agent_data['name']}\n\n"
+                f"**Description:** {agent_data.get('description', 'N/A')}\n\n"
+                f"**Specialties:** {', '.join(agent_data.get('specialties', []))}\n\n"
+                f"**When to use:** {agent_data.get('routing_prompt', 'N/A')}\n\n"
+                f"**Discovery responses:**\n"
+            )
+            for i, r in enumerate(discovery.get("raw_responses", []), 1):
+                brain_content += f"\n### Response {i}\n{r}\n"
+            save_note(f"Agent: {agent_data['name']}", brain_content, category="facts")
+        except Exception as e:
+            logger.warning(f"Failed to save agent discovery to brain: {e}")
+
+        agent_data["_discovery"] = {
+            "discovered": True,
+            "raw_responses": discovery.get("raw_responses", []),
+        }
+    except Exception as e:
+        logger.warning(f"Agent discovery failed for '{req.name}': {e}")
+        agent_data["_discovery"] = {"discovered": False, "error": str(e)}
+
+    # Remove internal fields before saving to YAML
+    discovery_result = agent_data.pop("_discovery", {})
+
+    agents.append(agent_data)
     save_agents(agents)
-    return {"status": "added", "agent": req.model_dump()}
+
+    return {
+        "status": "added",
+        "agent": agent_data,
+        "discovery": discovery_result,
+    }
 
 
 @router.delete("/agents/{name}")
