@@ -45,10 +45,16 @@ async function sendText() {
   hideWelcome();
   addMessage(msg, 'user');
 
-  // PARALLEL: Fire filler + LLM at the same time
-  const fillerText = speakFiller(msg);
+  // Fire filler + LLM in parallel
   const streamBubble = addStreamMessage();
-  updateStreamMessage(streamBubble, fillerText);
+
+  // Fire filler (async, updates bubble when ready)
+  speakFiller(msg).then(text => {
+    // Only update if we haven't started receiving LLM tokens yet
+    if (!streamBubble._hasTokens) {
+      updateStreamMessage(streamBubble, text);
+    }
+  });
 
   try {
     const r = await fetch(API + '/chat/stream', {
@@ -77,6 +83,7 @@ async function sendText() {
           if (data.type === 'filler') continue;
 
           if (data.type === 'token') {
+            streamBubble._hasTokens = true;
             fullResponse += data.content;
             updateStreamMessage(streamBubble, fullResponse);
           }

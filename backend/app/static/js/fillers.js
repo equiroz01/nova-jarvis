@@ -130,10 +130,11 @@ function preloadGreeting() {
 }
 
 /**
- * Speak a filler phrase. Returns the filler text displayed.
+ * Speak a filler phrase. Fetches text+audio from backend (single source of truth).
+ * Returns a Promise that resolves with the filler text.
  * On first message, plays a greeting instead.
  */
-export function speakFiller(queryHint) {
+export async function speakFiller(queryHint) {
   // First message of the session -> greeting (pre-cached audio)
   if (isFirstMessage) {
     isFirstMessage = false;
@@ -151,18 +152,21 @@ export function speakFiller(queryHint) {
   }
 
   const qtype = detectQueryType(queryHint);
-  const filler = pickFiller(queryHint);
 
-  // Request pre-cached filler audio from backend
-  fetch(API + '/filler', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query_type: qtype })
-  }).then(r => r.json()).then(data => {
+  // Single source: backend picks text + provides matching pre-cached audio
+  try {
+    const r = await fetch(API + '/filler', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query_type: qtype })
+    });
+    const data = await r.json();
     if (data.audio_base64) playAudio(data.audio_base64, 'filler');
-  }).catch(() => {});
-
-  return filler;
+    return data.text || pickFiller(queryHint);
+  } catch (e) {
+    // Fallback: use local text, no audio
+    return pickFiller(queryHint);
+  }
 }
 
 /**
