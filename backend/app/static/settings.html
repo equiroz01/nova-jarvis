@@ -235,20 +235,17 @@ select.form-input{cursor:pointer}
   <button class="add-btn" id="addAgentBtn" onclick="showAgentForm()">+ ADD AGENT</button>
 
   <div class="add-form" id="agentForm" style="display:none">
-    <div class="form-row">
-      <div class="form-field">
-        <span class="form-label">NAME</span>
-        <input class="form-input" id="aName" placeholder="e.g. Data Analyst">
-      </div>
-      <div class="form-field">
-        <span class="form-label">AGENT ID</span>
-        <input class="form-input" id="aAgentId" placeholder="Dialogflow CX agent ID">
-      </div>
+    <div class="mcp-desc" style="margin-bottom:12px;color:var(--cyan);font-size:12px">
+      Solo nombre, agent ID y location son obligatorios. NOVA entrevistará al agente automáticamente para descubrir sus capacidades.
     </div>
     <div class="form-row">
       <div class="form-field">
-        <span class="form-label">DESCRIPTION</span>
-        <input class="form-input" id="aDesc" placeholder="What this agent does">
+        <span class="form-label">NAME *</span>
+        <input class="form-input" id="aName" placeholder="e.g. Data Analyst">
+      </div>
+      <div class="form-field">
+        <span class="form-label">AGENT ID *</span>
+        <input class="form-input" id="aAgentId" placeholder="Dialogflow CX agent ID">
       </div>
     </div>
     <div class="form-row">
@@ -257,7 +254,7 @@ select.form-input{cursor:pointer}
         <input class="form-input" id="aProjId" value="gen-lang-client-0486673441">
       </div>
       <div class="form-field">
-        <span class="form-label">LOCATION</span>
+        <span class="form-label">LOCATION *</span>
         <select class="form-input" id="aLocation">
           <option value="us-central1">us-central1</option>
           <option value="us-east1">us-east1</option>
@@ -270,14 +267,27 @@ select.form-input{cursor:pointer}
     </div>
     <div class="form-row">
       <div class="form-field">
-        <span class="form-label">SPECIALTIES (comma-separated)</span>
-        <input class="form-input" id="aSpecs" placeholder="data, analysis, SQL, metrics">
+        <span class="form-label">DESCRIPTION (opcional — se auto-descubre)</span>
+        <input class="form-input" id="aDesc" placeholder="Dejar vacío para auto-discovery">
       </div>
     </div>
-    <div style="display:flex;gap:8px;margin-top:8px">
-      <button class="btn btn-primary" onclick="saveAgent()">SAVE AGENT</button>
-      <button class="btn" onclick="hideAgentForm()">CANCEL</button>
+    <div class="form-row">
+      <div class="form-field">
+        <span class="form-label">SPECIALTIES (opcional — se auto-descubren)</span>
+        <input class="form-input" id="aSpecs" placeholder="Dejar vacío para auto-discovery">
+      </div>
     </div>
+    <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+      <button class="btn btn-primary" id="saveAgentBtn" onclick="saveAgent()">REGISTER & DISCOVER</button>
+      <button class="btn" onclick="hideAgentForm()">CANCEL</button>
+      <span id="agentSaveStatus" style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--amber);display:none"></span>
+    </div>
+  </div>
+
+  <div class="add-form" id="discoveryResult" style="display:none;border-color:var(--green)">
+    <span class="form-label" style="color:var(--green)">DISCOVERY RESULT</span>
+    <div id="discoveryContent" style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text2);margin-top:8px;white-space:pre-wrap"></div>
+    <button class="btn" style="margin-top:8px" onclick="document.getElementById('discoveryResult').style.display='none'">CLOSE</button>
   </div>
 
   <h2 class="section-title">MCP SERVERS</h2>
@@ -931,7 +941,13 @@ function hideAgentForm() {
 async function saveAgent() {
   const name = document.getElementById('aName').value.trim();
   const agentId = document.getElementById('aAgentId').value.trim();
-  if (!name || !agentId) { alert('Name and Agent ID required'); return; }
+  if (!name || !agentId) { alert('Name and Agent ID are required'); return; }
+
+  const statusEl = document.getElementById('agentSaveStatus');
+  const saveBtn = document.getElementById('saveAgentBtn');
+  statusEl.style.display = 'inline';
+  statusEl.textContent = 'Registering & interviewing agent...';
+  saveBtn.disabled = true;
 
   const agent = {
     name: name,
@@ -943,23 +959,49 @@ async function saveAgent() {
     enabled: true,
   };
 
-  const r = await fetch(API + '/api/settings/agents/add', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(agent),
-  });
+  try {
+    const r = await fetch(API + '/api/settings/agents/add', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(agent),
+    });
 
-  if (r.ok) {
-    hideAgentForm();
-    loadAgents();
-    // Clear form
-    document.getElementById('aName').value = '';
-    document.getElementById('aAgentId').value = '';
-    document.getElementById('aDesc').value = '';
-    document.getElementById('aSpecs').value = '';
-  } else {
-    const err = await r.json();
-    alert('Error: ' + (err.detail || 'Failed'));
+    if (r.ok) {
+      const data = await r.json();
+      hideAgentForm();
+      loadAgents();
+
+      // Show discovery results
+      const disc = data.discovery || {};
+      const resultEl = document.getElementById('discoveryResult');
+      const contentEl = document.getElementById('discoveryContent');
+      if (disc.discovered && data.agent) {
+        const a = data.agent;
+        contentEl.textContent =
+          'Agent: ' + a.name + '\n' +
+          'Description: ' + (a.description || '(none)') + '\n' +
+          'Specialties: ' + (a.specialties || []).join(', ') + '\n' +
+          'Routing: ' + (a.routing_prompt || '(none)');
+        resultEl.style.display = 'block';
+      } else if (disc.error) {
+        contentEl.textContent = 'Discovery failed: ' + disc.error + '\nAgent registered without auto-discovery.';
+        resultEl.style.display = 'block';
+      }
+
+      // Clear form
+      document.getElementById('aName').value = '';
+      document.getElementById('aAgentId').value = '';
+      document.getElementById('aDesc').value = '';
+      document.getElementById('aSpecs').value = '';
+    } else {
+      const err = await r.json();
+      alert('Error: ' + (err.detail || 'Failed'));
+    }
+  } catch (e) {
+    alert('Network error: ' + e.message);
+  } finally {
+    statusEl.style.display = 'none';
+    saveBtn.disabled = false;
   }
 }
 
