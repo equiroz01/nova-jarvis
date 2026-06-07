@@ -1,3 +1,13 @@
 # Vertex AI Agents — registered agents that NOVA can delegate to.
 # Add your agents here or via the Settings UI at /settings.
+#
+# Fields per agent:
+#   name:           Display name
+#   description:    What the agent does (shown in UI and prompt)
+#   agent_id:       Dialogflow CX agent ID
+#   project_id:     GCP project ID
+#   location:       GCP region (e.g. us-central1)
+#   specialties:    Keywords for auto-routing (higher weight = stronger match)
+#   routing_prompt: When to use / when NOT to use this agent (helps LLM decide)
+#   enabled:        true/false
 agents: []

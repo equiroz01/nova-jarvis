@@ -8,6 +8,9 @@ logger = logging.getLogger(__name__)
 
 AGENTS_CONFIG_PATH = Path(__file__).parent.parent.parent / "agents_config.yaml"
 
+# Minimum confidence threshold for auto-routing (0-1)
+MIN_CONFIDENCE = 0.3
+
 
 def load_agents() -> list[dict]:
     """Load all agents from config."""
@@ -54,8 +57,10 @@ def find_agent_by_name(name: str) -> dict | None:
 def find_best_agent(description: str) -> dict | None:
     """Auto-route: find the best agent for a task description.
 
-    Strategy 1: keyword scoring from specialties.
-    Strategy 2: LLM classification (fallback if tie or no match).
+    Strategy 1: Weighted keyword scoring from specialties + description.
+    Strategy 2: LLM classification with routing_prompt context (fallback).
+
+    Returns None if no agent is confident enough (below MIN_CONFIDENCE).
     """
     agents = get_enabled_agents()
     if not agents:
@@ -65,58 +70,98 @@ def find_best_agent(description: str) -> dict | None:
 
     desc_lower = description.lower()
 
-    # Score by specialty keyword matches
-    scores = []
+    # Score each agent
+    scored = []
     for agent in agents:
-        specialties = agent.get("specialties", [])
-        score = sum(1 for kw in specialties if kw.lower() in desc_lower)
-        scores.append((score, agent))
+        score = _score_agent(agent, desc_lower)
+        scored.append((score, agent))
 
-    scores.sort(key=lambda x: x[0], reverse=True)
+    scored.sort(key=lambda x: x[0], reverse=True)
+    best_score, best_agent = scored[0]
+    second_score = scored[1][0] if len(scored) > 1 else 0
 
-    # Clear winner
-    if scores[0][0] > 0 and scores[0][0] > scores[1][0]:
-        return scores[0][1]
+    # Clear winner with enough confidence
+    if best_score > 0 and best_score > second_score * 1.5:
+        logger.info(f"Auto-route: '{best_agent['name']}' (score={best_score:.1f}, 2nd={second_score:.1f})")
+        return best_agent
 
-    # Tie or no keyword match — use LLM
+    # Close scores or no keyword match — use LLM
     try:
-        return _llm_classify(description, agents)
+        result = _llm_classify(description, agents)
+        if result:
+            return result
     except Exception as e:
         logger.warning(f"LLM agent classification failed: {e}")
-        # Return highest scorer or first agent
-        return scores[0][1] if scores[0][0] > 0 else agents[0]
+
+    # Last resort: return best scorer if any match at all
+    if best_score > 0:
+        return best_agent
+
+    return None
+
+
+def _score_agent(agent: dict, desc_lower: str) -> float:
+    """Score an agent's relevance to a description.
+
+    Scoring:
+    - Specialty keyword match: +1.0 per keyword found
+    - Description word overlap: +0.3 per word
+    - Agent name mentioned: +3.0
+    """
+    score = 0.0
+
+    # Specialty keywords (strongest signal)
+    for kw in agent.get("specialties", []):
+        if kw.lower() in desc_lower:
+            score += 1.0
+
+    # Agent description word overlap (weaker signal)
+    agent_desc = agent.get("description", "").lower()
+    if agent_desc:
+        desc_words = set(agent_desc.split())
+        query_words = set(desc_lower.split())
+        overlap = desc_words & query_words
+        # Ignore common words
+        stopwords = {"de", "la", "el", "en", "y", "a", "que", "para", "con", "los", "las", "un", "una", "the", "and", "for", "to"}
+        overlap -= stopwords
+        score += len(overlap) * 0.3
+
+    # Agent name explicitly mentioned
+    if agent["name"].lower() in desc_lower:
+        score += 3.0
+
+    return score
 
 
 def _llm_classify(description: str, agents: list[dict]) -> dict | None:
-    """Use LLM to pick the best agent."""
-    from app.tasks.workers.base import llm_generate
-    import asyncio
+    """Use LLM to pick the best agent, with routing_prompt context."""
+    from app.tasks.workers.base import _llm_call
 
-    agent_list = "\n".join(
-        f"- {a['name']}: {a.get('description', '')} (specialties: {', '.join(a.get('specialties', []))})"
-        for a in agents
-    )
+    agent_list = []
+    for a in agents:
+        entry = f"- {a['name']}: {a.get('description', '')}"
+        specs = ", ".join(a.get("specialties", []))
+        if specs:
+            entry += f" (specialties: {specs})"
+        routing = a.get("routing_prompt", "")
+        if routing:
+            entry += f"\n  Routing rules: {routing}"
+        agent_list.append(entry)
 
     prompt = (
         f"Given this task:\n\"{description}\"\n\n"
-        f"Which of these agents is the best match?\n{agent_list}\n\n"
-        f"Reply with ONLY the agent name, nothing else."
+        f"Which of these agents is the best match? If NONE of them fit well, reply 'NONE'.\n\n"
+        f"{''.join(agent_list)}\n\n"
+        f"Reply with ONLY the agent name (or 'NONE'). Nothing else."
     )
 
-    # Sync call since this may be called from sync context
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            from app.tasks.workers.base import _llm_call
-            result = _llm_call(prompt)
-        else:
-            result = asyncio.run(llm_generate(prompt))
-    except RuntimeError:
-        from app.tasks.workers.base import _llm_call
-        result = _llm_call(prompt)
-
-    # Match result to agent name
+    result = _llm_call(prompt)
     result_clean = result.strip().strip('"').strip("'")
+
+    if result_clean.upper() == "NONE":
+        logger.info("LLM classified: no agent fits this task")
+        return None
+
     return find_agent_by_name(result_clean)
 
 
@@ -130,6 +175,12 @@ def get_agent_descriptions() -> str:
     for a in agents:
         specs = ", ".join(a.get("specialties", []))
         desc = a.get("description", "")
-        lines.append(f"- **{a['name']}**: {desc}" + (f" (specialties: {specs})" if specs else ""))
+        routing = a.get("routing_prompt", "")
+        line = f"- **{a['name']}**: {desc}"
+        if specs:
+            line += f" (specialties: {specs})"
+        if routing:
+            line += f"\n  When to use: {routing}"
+        lines.append(line)
 
     return "\n".join(lines)
