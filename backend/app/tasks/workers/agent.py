@@ -3,7 +3,7 @@
 import logging
 
 from app.vertex_agents.registry import find_agent_by_name, find_best_agent
-from app.vertex_agents.client import detect_intent
+from app.vertex_agents.client import query_agent
 from app.tasks.workers.base import llm_generate
 
 logger = logging.getLogger(__name__)
@@ -146,7 +146,7 @@ async def _converse_with_agent(
             progress=progress, progress_text=f"Turno {turn + 1}: comunicándose con agente...",
         )
 
-        response = detect_intent(agent, session_id, message)
+        response = query_agent(agent, session_id, message)
 
         if response.startswith("Error:"):
             return response

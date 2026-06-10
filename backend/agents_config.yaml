@@ -1,13 +1,235 @@
 # Vertex AI Agents — registered agents that NOVA can delegate to.
-# Add your agents here or via the Settings UI at /settings.
-#
-# Fields per agent:
-#   name:           Display name
-#   description:    What the agent does (shown in UI and prompt)
-#   agent_id:       Dialogflow CX agent ID
-#   project_id:     GCP project ID
-#   location:       GCP region (e.g. us-central1)
-#   specialties:    Keywords for auto-routing (higher weight = stronger match)
-#   routing_prompt: When to use / when NOT to use this agent (helps LLM decide)
-#   enabled:        true/false
-agents: []
+# type: reasoning_engine (Vertex AI Agent Engine) or dialogflow_cx (legacy)
+# Discovery run: 2026-06-09
+agents:
+  - name: Agent Eval Hypernova
+    description: >-
+      Agente de evaluación estratégica que analiza empresas usando información
+      pública para identificar oportunidades de IA y soluciones agentic.
+      Perfila industria, madurez digital, puntos de dolor, riesgos y
+      oportunidades de agentes conversacionales por área de negocio.
+    agent_id: '5570823546441039872'
+    type: reasoning_engine
+    project_id: hypernovalabs-sa
+    location: us-central1
+    specialties:
+      - evaluacion
+      - empresas
+      - estrategia
+      - competencia
+      - due diligence
+      - analisis
+      - mercado
+      - madurez digital
+      - oportunidades ia
+      - perfil consultivo
+      - agentes conversacionales
+      - puntos de dolor
+    routing_prompt: >-
+      Usar cuando el usuario quiera evaluar una empresa, analizar su madurez
+      digital, identificar oportunidades de IA o soluciones agentic, o generar
+      un perfil consultivo. NO usar para información financiera privada,
+      dictámenes legales, ni preguntas fuera del análisis estratégico empresarial.
+    enabled: true
+
+  - name: WC26 Tickets
+    description: >-
+      Agente de re-venta y gestión de boletos para FIFA World Cup 2026.
+      Pendiente nuevo deploy.
+    agent_id: '7134753492626833408'
+    type: reasoning_engine
+    project_id: hypernovalabs-sa
+    location: us-central1
+    specialties:
+      - boletos
+      - tickets
+      - mundial
+      - fifa
+      - wc26
+      - world cup
+      - partidos
+      - estadio
+    routing_prompt: >-
+      Usar para consultas sobre boletos del Mundial 2026. Pendiente nuevo deploy.
+    enabled: false
+
+  - name: Global KYC Agent
+    description: >-
+      Agente router de KYC global. Dirige solicitudes al sub-agente apropiado
+      según el país de origen: uk_kyc_agent para empresas UK (Companies House)
+      o usa_kyc_agent para empresas US (SEC/EDGAR, insider trading).
+    agent_id: '2830315003465170944'
+    type: reasoning_engine
+    project_id: hypernovalabs-sa
+    location: us-central1
+    specialties:
+      - kyc
+      - verificacion
+      - identidad
+      - compliance
+      - companies house
+      - sec
+      - edgar
+      - insider trading
+      - uk
+      - usa
+      - due diligence
+      - empresa
+    routing_prompt: >-
+      Usar para verificaciones KYC de empresas en UK (Companies House) o
+      USA (SEC/EDGAR). El agente rutea al sub-agente correcto según el país.
+      NO usar para KYC de personas físicas, países fuera de UK/USA, ni para
+      análisis financiero profundo.
+    enabled: true
+
+  - name: Invoice Processing
+    description: >-
+      Asistente de procesamiento de facturas con dos modos: Inference (pipeline
+      completo de clasificación, extracción, validación y transformación) y
+      Learning (revisión de casos con SMEs y gestión de reglas ALF para mejorar
+      el procesamiento automático).
+    agent_id: '5303917098798415872'
+    type: reasoning_engine
+    project_id: hypernovalabs-sa
+    location: us-central1
+    specialties:
+      - factura
+      - invoice
+      - procesamiento
+      - alf
+      - clasificacion
+      - extraccion
+      - validacion
+      - pipeline
+      - reglas
+      - caso
+    routing_prompt: >-
+      Usar para procesar facturas (pipeline completo o parcial), revisar
+      casos de facturación, crear o modificar reglas ALF, o consultas sobre
+      el framework de procesamiento. NO usar para contabilidad general,
+      impuestos, ni temas financieros fuera del procesamiento de facturas.
+    enabled: true
+
+  - name: Agent Pricing Hypernova
+    description: >-
+      Copiloto de precios y promociones para supermercados de Panamá (Riba Smith,
+      Super 99, Super Xtra, El Machetazo). Compara precios entre supermercados,
+      analiza márgenes y rentabilidad, sugiere estrategias de pricing y
+      promociones, y busca precios complementarios en la web.
+    agent_id: '4211857960835481600'
+    type: reasoning_engine
+    project_id: hypernovalabs-sa
+    location: us-central1
+    specialties:
+      - precio
+      - pricing
+      - tarifa
+      - supermercado
+      - comparacion
+      - margen
+      - promocion
+      - riba smith
+      - super 99
+      - machetazo
+      - cotizacion
+      - descuento
+      - competencia precios
+    routing_prompt: >-
+      Usar para comparar precios entre supermercados panameños, analizar márgenes,
+      sugerir promociones o estrategias de pricing de productos retail.
+      NO usar para cambiar precios directamente, gestionar inventario,
+      ni para pricing de servicios tech/SaaS.
+    enabled: true
+
+  - name: Agent GitHub Hypernova
+    description: >-
+      Agente de visibilidad de proyectos GitHub para Hypernova Labs. Analiza
+      actividad de repositorios, contribución de desarrolladores, estado de PRs
+      e issues, salud de ramas, y genera reportes ejecutivos. Solo lectura —
+      no puede modificar nada en GitHub.
+    agent_id: '1411744892517875712'
+    type: reasoning_engine
+    project_id: hypernovalabs-sa
+    location: us-central1
+    specialties:
+      - github
+      - repositorio
+      - commits
+      - pull request
+      - issues
+      - codigo
+      - proyecto
+      - desarrollo
+      - reporte
+      - actividad
+      - ramas
+      - contribuidores
+    routing_prompt: >-
+      Usar para reportes ejecutivos de actividad en GitHub, análisis de
+      contribuidores, estado de PRs/issues y salud de proyectos.
+      NO usar para modificar repos (crear PRs, cerrar issues) — para eso
+      usar MCP de GitHub. NO usar para consultas fuera de GitHub.
+    enabled: true
+
+  - name: Agent Sales Hypernova
+    description: >-
+      Asistente de ventas de Hypernova Labs. Gestiona CRM (Monday.com),
+      cotizaciones (PandaDoc), correos comerciales (SendGrid), leads y
+      productos (Antares). Maneja productos HNL: MARIA AI, CELIA, RAGIA,
+      PODS, ATELOPUS. Puede crear clientes, deals, contactos y cotizaciones.
+    agent_id: '8329273920158957568'
+    type: reasoning_engine
+    project_id: hypernovalabs-sa
+    location: us-central1
+    specialties:
+      - ventas
+      - sales
+      - crm
+      - monday
+      - pandadoc
+      - cotizacion
+      - prospecto
+      - cliente
+      - deal
+      - pipeline
+      - propuesta
+      - comercial
+      - lead
+      - sendgrid
+    routing_prompt: >-
+      Usar para gestión comercial: buscar/crear clientes y deals en Monday.com,
+      crear cotizaciones en PandaDoc, enviar correos con plantillas SendGrid,
+      consultar productos HNL. NO usar para eliminar registros, modificar
+      registros existentes en Monday, ni para tareas administrativas de plataformas.
+    enabled: true
+
+  - name: Agent Email Hypernova
+    description: >-
+      Asistente de correo electrónico para Hypernova Labs. Lee, busca, envía,
+      responde, reenvía, elimina y organiza correos. Puede crear carpetas,
+      mover correos, marcar como leído/no leído y abanderar. Gestión completa
+      de buzón Outlook/Microsoft 365.
+    agent_id: '6063611463870709760'
+    type: reasoning_engine
+    project_id: hypernovalabs-sa
+    location: us-central1
+    specialties:
+      - correo
+      - email
+      - outlook
+      - bandeja
+      - mensaje
+      - responder
+      - redactar
+      - mail
+      - reenviar
+      - carpeta
+      - no leido
+      - enviar correo
+    routing_prompt: >-
+      Usar para gestión avanzada de correo: buscar, filtrar, enviar, responder,
+      organizar en carpetas, manejar correos no leídos. Para operaciones
+      simples de email (leer últimos, enviar rápido) preferir las herramientas
+      directas de Outlook de NOVA. Usar este agente para tareas complejas
+      como filtros avanzados, organización masiva o redacción elaborada.
+    enabled: true

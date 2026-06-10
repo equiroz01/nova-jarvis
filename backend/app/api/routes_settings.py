@@ -356,7 +356,8 @@ class VertexAgentRequest(BaseModel):
     name: str
     description: str = ""
     agent_id: str
-    project_id: str = "gen-lang-client-0486673441"
+    type: str = "reasoning_engine"  # reasoning_engine or dialogflow_cx
+    project_id: str = "hypernovalabs-sa"
     location: str = "us-central1"
     specialties: list[str] = []
     routing_prompt: str = ""

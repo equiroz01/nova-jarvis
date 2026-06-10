@@ -11,6 +11,10 @@ AGENTS_CONFIG_PATH = Path(__file__).parent.parent.parent / "agents_config.yaml"
 # Minimum confidence threshold for auto-routing (0-1)
 MIN_CONFIDENCE = 0.3
 
+# Valid agent types
+AGENT_TYPE_REASONING_ENGINE = "reasoning_engine"
+AGENT_TYPE_DIALOGFLOW_CX = "dialogflow_cx"
+
 
 def load_agents() -> list[dict]:
     """Load all agents from config."""
@@ -176,7 +180,9 @@ def get_agent_descriptions() -> str:
         specs = ", ".join(a.get("specialties", []))
         desc = a.get("description", "")
         routing = a.get("routing_prompt", "")
-        line = f"- **{a['name']}**: {desc}"
+        agent_type = a.get("type", AGENT_TYPE_REASONING_ENGINE)
+        type_label = "RE" if agent_type == AGENT_TYPE_REASONING_ENGINE else "CX"
+        line = f"- **{a['name']}** [{type_label}]: {desc}"
         if specs:
             line += f" (specialties: {specs})"
         if routing:

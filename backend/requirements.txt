@@ -12,6 +12,9 @@ langchain-community>=0.3.0,<1.0.0
 google-api-python-client>=2.150.0
 google-auth-oauthlib>=1.2.0
 
+# Vertex AI Agent Engine (Reasoning Engines)
+google-cloud-aiplatform>=1.112
+
 # MCP
 mcp>=1.0.0
 

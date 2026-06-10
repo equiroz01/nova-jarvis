@@ -16,12 +16,12 @@ def delegate_to_agent(agent_name: str, message: str) -> str:
     Available agents are listed in the system prompt under VERTEX AI AGENTS.
 
     Args:
-        agent_name: Name of the agent to call (e.g. "Data Analyst")
+        agent_name: Name of the agent to call (e.g. "Agent Sales Hypernova")
         message: The question or request to send to the agent
     """
     try:
         from app.vertex_agents.registry import find_agent_by_name, get_enabled_agents
-        from app.vertex_agents.client import detect_intent
+        from app.vertex_agents.client import query_agent
 
         agent = find_agent_by_name(agent_name)
         if not agent:
@@ -33,7 +33,7 @@ def delegate_to_agent(agent_name: str, message: str) -> str:
             )
 
         session_id = f"nova-rt-{uuid.uuid4().hex[:8]}"
-        response = detect_intent(agent, session_id, message)
+        response = query_agent(agent, session_id, message)
 
         if response.startswith("Error:"):
             return response
