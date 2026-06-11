@@ -5,11 +5,30 @@ Home Assistant, DuckDuckGo, WebSocket clients) are mocked at the fixture
 level so no real API calls are ever made.
 """
 
+import os
 from contextlib import asynccontextmanager
 from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+
+# Set the critical env vars at MODULE level (conftest is imported before test
+# collection) so the pydantic `settings` singleton is built with test values no
+# matter when it is first constructed — i.e. even if a test module imports an app
+# module at import time. The autouse fixture below still re-applies them per-test.
+_TEST_ENV = {
+    "GEMINI_API_KEY": "test-gemini-key",
+    "ALLOWED_ORIGINS": "*",
+    "LOG_LEVEL": "WARNING",
+    "GOOGLE_CLIENT_ID": "test-client-id",
+    "GOOGLE_CLIENT_SECRET": "test-client-secret",
+    "GOOGLE_REFRESH_TOKEN": "test-refresh-token",
+    "HOME_ASSISTANT_URL": "http://ha-test.local:8123",
+    "HOME_ASSISTANT_TOKEN": "test-ha-token",
+    "ALEXA_SKILL_ID": "amzn1.ask.skill.test",
+}
+for _k, _v in _TEST_ENV.items():
+    os.environ.setdefault(_k, _v)
 
 
 # ---------------------------------------------------------------------------
@@ -18,15 +37,8 @@ from fastapi.testclient import TestClient
 @pytest.fixture(autouse=True)
 def _patch_settings(monkeypatch, tmp_path):
     """Ensure every test gets safe, deterministic settings."""
-    monkeypatch.setenv("GEMINI_API_KEY", "test-gemini-key")
-    monkeypatch.setenv("ALLOWED_ORIGINS", "*")
-    monkeypatch.setenv("LOG_LEVEL", "WARNING")
-    monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client-id")
-    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "test-client-secret")
-    monkeypatch.setenv("GOOGLE_REFRESH_TOKEN", "test-refresh-token")
-    monkeypatch.setenv("HOME_ASSISTANT_URL", "http://ha-test.local:8123")
-    monkeypatch.setenv("HOME_ASSISTANT_TOKEN", "test-ha-token")
-    monkeypatch.setenv("ALEXA_SKILL_ID", "amzn1.ask.skill.test")
+    for _k, _v in _TEST_ENV.items():
+        monkeypatch.setenv(_k, _v)
     # Isolate durable state (task + session SQLite) to a per-test temp dir, and
     # reset the cached connection / in-memory session cache so no state bleeds
     # across tests or into the real ~/.nova/data DB.

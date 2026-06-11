@@ -1,4 +1,5 @@
 import logging
+import os
 import uuid
 from pathlib import Path
 from contextlib import asynccontextmanager
@@ -12,6 +13,7 @@ from app.config import settings
 from app.security import is_trusted_request
 from app.context import request_id_var
 from app.logging_config import setup_logging
+from app.ratelimit import RateLimiter
 from app.api.routes_health import router as health_router
 from app.api.routes_chat import router as chat_router
 from app.api.routes_voice import router as voice_router
@@ -94,6 +96,32 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Per-client token bucket on the expensive paths, so a runaway retry loop or a
+# stuck Alexa can't burn the Gemini quota / both task workers and take NOVA down.
+_RL_PER_MIN = int(os.environ.get("NOVA_RATE_LIMIT_PER_MIN", "30"))
+_rate_limiter = RateLimiter(capacity=_RL_PER_MIN, refill_per_sec=_RL_PER_MIN / 60.0)
+_RATE_LIMITED_PATHS = ("/chat", "/voice")
+
+
+def _client_key(request: Request) -> str:
+    # Real external IP when tunnelled, else the socket peer (loopback for local).
+    return request.headers.get("cf-connecting-ip") or (
+        request.client.host if request.client else "unknown"
+    )
+
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    if request.url.path.startswith(_RATE_LIMITED_PATHS):
+        if not _rate_limiter.allow(_client_key(request)):
+            logger.warning("Rate limit hit for %s on %s", _client_key(request), request.url.path)
+            return JSONResponse(
+                status_code=429,
+                content={"detail": f"Rate limit ({_RL_PER_MIN}/min). Slow down and retry."},
+            )
+    return await call_next(request)
 
 
 # Added last = outermost: stamps the request_id before anything else logs, so every

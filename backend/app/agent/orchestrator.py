@@ -42,7 +42,10 @@ CLOUD_TOOLS = [
 
 LOCAL_TOOLS = [take_screenshot, read_screen_text, run_arp_scan]
 
-ALL_TOOLS = list(CLOUD_TOOLS) + list(LOCAL_TOOLS)
+from app.guardrails import wrap_tools
+
+# Audit (and optionally gate) every side-effecting tool — single touchpoint.
+ALL_TOOLS = wrap_tools(list(CLOUD_TOOLS) + list(LOCAL_TOOLS))
 
 # ── Cached LLM and executor ──
 _llm = None

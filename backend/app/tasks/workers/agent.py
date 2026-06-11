@@ -128,6 +128,8 @@ async def agent_worker(task, update_progress) -> str:
     result = f"**Agent: {agent['name']}**\n\n{final_response}"
     if quality == "incomplete":
         result += "\n\n---\n*Nota: La respuesta puede estar incompleta. Considere hacer preguntas de seguimiento.*"
+    elif quality == "unknown":
+        result += "\n\n---\n*Nota: No se pudo verificar la completitud de esta respuesta.*"
 
     return result
 
@@ -172,7 +174,7 @@ async def _converse_with_agent(
 async def _assess_quality(original_question: str, response: str) -> str:
     """Quick LLM check: is the response complete?
 
-    Returns: "complete", "incomplete", or "error"
+    Returns: "complete", "incomplete", or "unknown" (when the check itself failed).
     """
     try:
         check = await llm_generate(
@@ -188,7 +190,9 @@ async def _assess_quality(original_question: str, response: str) -> str:
             return "incomplete"
         return "complete"
     except Exception:
-        return "complete"  # Don't block on quality check failure
+        # Fail CLOSED: the check didn't run, so don't assert completeness — say so.
+        logger.warning("Quality check failed; reporting 'unknown'", exc_info=True)
+        return "unknown"
 
 
 async def _llm_fallback(description: str, agent_name: str, partial_response: str = None) -> str:

@@ -50,6 +50,68 @@ def _brave_request(endpoint: str, params: dict) -> dict:
         return json.loads(resp.read().decode())
 
 
+def _brave_search(query: str) -> str:
+    """Primary backend. Raises on key/network/HTTP failure so web_search can fall back."""
+    news_keywords = ["noticias", "news", "hoy", "today", "reciente", "latest", "actual",
+                     "pasó", "paso", "novedades", "titulares"]
+    is_news = any(kw in query.lower() for kw in news_keywords)
+
+    if is_news:
+        # Try news endpoint first; a news miss falls through to web (not an outage).
+        try:
+            data = _brave_request("news/search", {"q": query, "count": 5})
+            results = data.get("results", [])
+            if results:
+                formatted = []
+                for i, r in enumerate(results, 1):
+                    source = r.get("meta_url", {}).get("hostname", "")
+                    formatted.append(
+                        f"{i}. [{source}] {r.get('title','')}\n   {r.get('description','')[:150]}\n"
+                        f"   {r.get('age','')} | {r.get('url','')}"
+                    )
+                return f"Noticias para '{query}':\n\n" + "\n\n".join(formatted)
+        except urllib.error.HTTPError:
+            raise  # real outage → let web_search fall back
+        except Exception:
+            logger.debug("Brave news miss, trying web", exc_info=True)
+
+    data = _brave_request("web/search", {"q": query, "count": 5})
+    results = data.get("web", {}).get("results", [])
+    if not results:
+        return f"No se encontraron resultados para: '{query}'"
+
+    formatted = []
+    for i, r in enumerate(results, 1):
+        formatted.append(f"{i}. {r.get('title','')}\n   {r.get('description','')[:150]}\n   {r.get('url','')}")
+    return f"Resultados para '{query}':\n\n" + "\n\n".join(formatted)
+
+
+def _ddg_search(query: str) -> str:
+    """Keyless backstop (DuckDuckGo Instant Answer). Degraded but beats a dead worker."""
+    qs = urllib.parse.urlencode({"q": query, "format": "json", "no_html": 1, "skip_disambig": 1})
+    req = urllib.request.Request(
+        f"https://api.duckduckgo.com/?{qs}",
+        headers={"Accept": "application/json", "User-Agent": "NOVA/1.0"},
+    )
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        data = json.loads(resp.read().decode())
+
+    parts = []
+    if data.get("AbstractText"):
+        parts.append(f"{data['AbstractText']}\n   {data.get('AbstractURL','')}")
+    for topic in data.get("RelatedTopics", []):
+        if len(parts) >= 5:
+            break
+        text = topic.get("Text")
+        if text:
+            parts.append(f"{text}\n   {topic.get('FirstURL','')}")
+
+    if not parts:
+        return f"No se encontraron resultados para: '{query}'"
+    body = "\n\n".join(f"{i}. {p}" for i, p in enumerate(parts, 1))
+    return f"Resultados para '{query}' (vía DuckDuckGo):\n\n{body}"
+
+
 @tool
 def web_search(query: str) -> str:
     """Search the internet for real-time information using Brave Search. You MUST use this tool whenever the user asks about:
@@ -60,57 +122,12 @@ def web_search(query: str) -> str:
     - Any question that requires up-to-date information you don't have
     Always call this tool first before saying you can't find information."""
     try:
-        news_keywords = ["noticias", "news", "hoy", "today", "reciente", "latest", "actual",
-                         "pasó", "paso", "novedades", "titulares"]
-        is_news = any(kw in query.lower() for kw in news_keywords)
-
-        if is_news:
-            # Try news endpoint first
-            try:
-                data = _brave_request("news/search", {
-                    "q": query,
-                    "count": 5,
-                })
-                results = data.get("results", [])
-                if results:
-                    formatted = []
-                    for i, r in enumerate(results, 1):
-                        title = r.get("title", "")
-                        desc = r.get("description", "")
-                        source = r.get("meta_url", {}).get("hostname", "")
-                        age = r.get("age", "")
-                        url = r.get("url", "")
-                        formatted.append(
-                            f"{i}. [{source}] {title}\n   {desc[:150]}\n   {age} | {url}"
-                        )
-                    return f"Noticias para '{query}':\n\n" + "\n\n".join(formatted)
-            except Exception:
-                pass  # Fall through to web search
-
-        # Web search
-        data = _brave_request("web/search", {
-            "q": query,
-            "count": 5,
-        })
-
-        results = data.get("web", {}).get("results", [])
-        if not results:
-            return f"No se encontraron resultados para: '{query}'"
-
-        formatted = []
-        for i, r in enumerate(results, 1):
-            title = r.get("title", "")
-            desc = r.get("description", "")[:150]
-            url = r.get("url", "")
-            formatted.append(f"{i}. {title}\n   {desc}\n   {url}")
-
-        return f"Resultados para '{query}':\n\n" + "\n\n".join(formatted)
-
-    except RuntimeError as e:
-        return str(e)
-    except urllib.error.HTTPError as e:
-        logger.error(f"Brave Search error: {e.code}")
-        return f"Error de búsqueda ({e.code}). Verifica la API key."
-    except Exception as e:
-        logger.error(f"Search error: {e}", exc_info=True)
-        return f"Error de búsqueda: {e}"
+        return _brave_search(query)
+    except Exception as brave_err:
+        # Brave outage / missing key → degrade to DuckDuckGo instead of dying silently.
+        logger.warning("Brave search failed (%s); falling back to DuckDuckGo", brave_err)
+        try:
+            return _ddg_search(query)
+        except Exception as ddg_err:
+            logger.error("Both search providers failed: brave=%s ddg=%s", brave_err, ddg_err, exc_info=True)
+            return f"Error de búsqueda (Brave y DuckDuckGo no disponibles): {brave_err}"
