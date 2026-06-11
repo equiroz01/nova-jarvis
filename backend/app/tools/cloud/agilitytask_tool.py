@@ -27,7 +27,7 @@ def _load_credentials() -> tuple[str, str]:
             _API_KEY = kc_key
             return _API_KEY, _BASE_URL
     except Exception:
-        pass
+        logger.debug("Keychain read for agilitytask_api_key failed; falling back to file", exc_info=True)
 
     # Fallback to credentials file
     creds_paths = [

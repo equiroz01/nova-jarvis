@@ -3,6 +3,7 @@ import logging
 from fastapi import APIRouter
 from app.config import settings
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _start_time = time.time()
@@ -35,7 +36,7 @@ async def health():
         info["mcp_servers"] = len(mcp)
         info["mcp_connected"] = sum(1 for s in mcp if s.get("connected"))
     except Exception:
-        pass
+        logger.warning("Health probe: MCP status failed", exc_info=True)
 
     # Voice ID
     try:
@@ -50,6 +51,6 @@ async def health():
         stats = get_stats()
         info["brain_notes"] = stats.get("total_notes", 0)
     except Exception:
-        pass
+        logger.warning("Health probe: brain stats failed", exc_info=True)
 
     return info

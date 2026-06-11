@@ -143,7 +143,7 @@ class MCPConnection:
             if hasattr(self, '_transport'):
                 await self._transport.__aexit__(None, None, None)
         except Exception:
-            pass
+            logger.warning("MCP disconnect cleanup failed", exc_info=True)
 
 
 def _make_langchain_tool(connection: MCPConnection, mcp_tool) -> StructuredTool:

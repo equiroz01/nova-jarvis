@@ -230,13 +230,13 @@ async def agilitytask_save_credentials(
     creds["baseUrl"] = baseUrl or "https://agilitytask.hnlapps.com"
     _save_agility_creds(creds)
 
-    # Clear cached API key in tool
+    # Clear cached API key in tool (best-effort; the save above already succeeded)
     try:
         from app.tools.cloud.agilitytask_tool import _load_credentials
         import app.tools.cloud.agilitytask_tool as at
         at._API_KEY = None
     except Exception:
-        pass
+        logger.warning("AgilityTask API-key cache clear failed after save", exc_info=True)
 
     return {"status": "saved"}
 
@@ -251,7 +251,7 @@ async def agilitytask_delete_credentials():
         import app.tools.cloud.agilitytask_tool as at
         at._API_KEY = None
     except Exception:
-        pass
+        logger.warning("AgilityTask API-key cache clear failed after delete", exc_info=True)
     return {"status": "deleted"}
 
 
@@ -294,13 +294,13 @@ async def microsoft_delete_credentials():
     from app.services.keychain import keychain
     for key in ["microsoft_client_id", "microsoft_client_secret", "microsoft_refresh_token", "microsoft_tenant_id"]:
         keychain.delete(key)
-    # Clear cached token
+    # Clear cached token (best-effort; the Keychain delete above already succeeded)
     try:
         import app.services.microsoft_auth as ma
         ma._access_token = ""
         ma._token_expiry = 0
     except Exception:
-        pass
+        logger.warning("Microsoft token cache clear failed after delete", exc_info=True)
     return {"status": "deleted"}
 
 

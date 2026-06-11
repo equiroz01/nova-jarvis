@@ -53,9 +53,11 @@ class TestChatEndpoint:
     # ---- Session isolation ----
 
     def test_should_PassSessionIdToAgent_when_Provided(self, client, mock_agent_executor):
-        with patch("app.api.routes_chat.invoke_agent", wraps=lambda m, s, e: "ok") as mock_invoke:
+        with patch("app.api.routes_chat.invoke_agent", wraps=lambda *a, **k: "ok") as mock_invoke:
             client.post("/chat", json={"message": "test", "session_id": "sess-1"})
-            mock_invoke.assert_called_once_with("test", "sess-1", mock_agent_executor)
+            mock_invoke.assert_called_once_with(
+                "test", "sess-1", mock_agent_executor, client_id="default"
+            )
 
     # ---- Edge cases ----
 

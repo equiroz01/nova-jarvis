@@ -44,7 +44,7 @@ def _get_credentials() -> tuple[str, str, str, str]:
         refresh_token = keychain.get("microsoft_refresh_token")
         tenant_id = keychain.get("microsoft_tenant_id")
     except Exception:
-        pass
+        logger.warning("Keychain read for Microsoft creds failed; falling back to .env", exc_info=True)
 
     # Fallback to settings/.env
     client_id = client_id or getattr(settings, "microsoft_client_id", "") or ""

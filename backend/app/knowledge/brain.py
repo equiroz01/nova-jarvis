@@ -125,6 +125,7 @@ def search_notes(query: str, max_results: int = 5) -> list[dict]:
         try:
             content = md_file.read_text(encoding="utf-8")
         except Exception:
+            logger.debug("Skipping unreadable note during search: %s", md_file, exc_info=True)
             continue
 
         content_lower = content.lower()
@@ -256,7 +257,7 @@ def get_stats() -> dict:
             content = md_file.read_text(encoding="utf-8")
             total_links += len(_extract_links(content))
         except Exception:
-            pass
+            logger.debug("Skipping unreadable note during stats: %s", md_file, exc_info=True)
 
     return {
         "total_notes": total,

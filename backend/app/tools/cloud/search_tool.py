@@ -25,7 +25,7 @@ def _get_api_key() -> str:
             _API_KEY = key
             return key
     except Exception:
-        pass
+        logger.debug("Keychain read for brave_api_key failed; falling back to env", exc_info=True)
     # Fallback to env
     import os
     key = os.environ.get("BRAVE_API_KEY", "")
