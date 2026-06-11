@@ -27,8 +27,9 @@ def _db() -> sqlite3.Connection:
     global _conn
     if _conn is None:
         path = _resolve_db_path()  # ~/.nova/data/tasks.db (shared file)
-        _conn = sqlite3.connect(path, check_same_thread=False)
+        _conn = sqlite3.connect(path, timeout=10, check_same_thread=False)
         _conn.execute("PRAGMA journal_mode=WAL")
+        _conn.execute("PRAGMA busy_timeout=8000")  # wait up to 8s for locks
         _conn.execute(
             """
             CREATE TABLE IF NOT EXISTS sessions (
@@ -75,6 +76,29 @@ def append(session_id: str, role: str, content: str) -> None:
             c.commit()
     except Exception:
         logger.warning("Session append failed for %s", session_id, exc_info=True)
+
+
+def append_turn(session_id: str, user_message: str, ai_response: str) -> None:
+    """Persist a complete turn (user + AI) in a single transaction.
+
+    This is preferred over two separate append() calls because it takes
+    the SQLite write lock only once, reducing 'database is locked' errors
+    when the task store is active on the same file.
+    """
+    now = time.time()
+    try:
+        with _lock:
+            c = _db()
+            c.executemany(
+                "INSERT INTO sessions (session_id, role, content, ts) VALUES (?, ?, ?, ?)",
+                [
+                    (session_id, "user", user_message, now),
+                    (session_id, "ai", ai_response, now + 0.001),
+                ],
+            )
+            c.commit()
+    except Exception:
+        logger.warning("Session turn append failed for %s", session_id, exc_info=True)
 
 
 def clear(session_id: str) -> None:

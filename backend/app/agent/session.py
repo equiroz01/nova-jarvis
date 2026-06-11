@@ -31,9 +31,12 @@ def get_memory(session_id: str) -> ConversationBufferWindowMemory:
 
 
 def persist_turn(session_id: str, user_message: str, ai_response: str) -> None:
-    """Append a completed turn to the durable store (write-through)."""
-    session_store.append(session_id, "user", user_message)
-    session_store.append(session_id, "ai", ai_response)
+    """Append a completed turn to the durable store (write-through).
+
+    Uses a single transaction to minimize SQLite lock contention with the
+    async task store that shares the same database file.
+    """
+    session_store.append_turn(session_id, user_message, ai_response)
 
 
 def clear_session(session_id: str) -> None:

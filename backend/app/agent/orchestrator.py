@@ -5,8 +5,9 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 
 from app.config import settings
-from app.agent.prompts import build_prompt
-from app.agent.session import get_memory
+from app.agent.prompts import build_prompt, current_datetime_vars
+from app.context import client_id_var
+from app.agent.session import get_memory, persist_turn
 from app.tools.cloud.time_tool import get_time
 from app.tools.cloud.search_tool import web_search
 from app.tools.cloud.calendar_tool import get_upcoming_events, create_calendar_event
@@ -45,8 +46,7 @@ ALL_TOOLS = list(CLOUD_TOOLS) + list(LOCAL_TOOLS)
 
 # ── Cached LLM and executor ──
 _llm = None
-_executor = None
-_executor_minute = None  # refresh prompt every minute for fresh date/time
+_executor = None  # built once; date/time injected fresh at invoke time
 
 
 def _get_llm() -> ChatGoogleGenerativeAI:
@@ -61,11 +61,12 @@ def _get_llm() -> ChatGoogleGenerativeAI:
 
 
 def _get_executor() -> AgentExecutor:
-    """Get cached executor, refresh prompt only once per minute."""
-    global _executor, _executor_minute
-    now_minute = datetime.now().strftime("%Y%m%d%H%M")
+    """Build the agent executor ONCE and reuse it. Date/time are no longer baked
+    into the prompt (they are injected per-invoke), so the executor never expires —
+    this avoids rebuilding the agent + re-reading every MCP tool 1,440 times/day."""
+    global _executor
 
-    if _executor is None or _executor_minute != now_minute:
+    if _executor is None:
         from app.mcp_manager import get_mcp_tools
         mcp_tools = get_mcp_tools()
         all_tools = ALL_TOOLS + mcp_tools
@@ -81,8 +82,7 @@ def _get_executor() -> AgentExecutor:
             max_iterations=5,
             max_execution_time=120,
         )
-        _executor_minute = now_minute
-        logger.debug(f"Executor refreshed: {len(ALL_TOOLS)} built-in + {len(mcp_tools)} MCP tools")
+        logger.info(f"Executor built: {len(ALL_TOOLS)} built-in + {len(mcp_tools)} MCP tools")
 
     return _executor
 
@@ -195,8 +195,17 @@ def _prefetch_briefing() -> str:
     return "\n".join(parts)
 
 
-def invoke_agent(message: str, session_id: str, executor=None, retries: int = 2) -> str:
+def get_current_client_id() -> str:
+    """Get the client_id for the current request context (used by agent tools)."""
+    return client_id_var.get()
+
+
+def invoke_agent(message: str, session_id: str, executor=None, retries: int = 2, client_id: str = "default") -> str:
     """Invoke the agent with caching, memory, and retry."""
+    # Bind client_id to the current context so tools (and the Vertex session pool)
+    # read the right value — survives the executor hop the task runner makes.
+    client_id_var.set(client_id)
+
     # Check cache first
     cached = _check_cache(message)
     if cached:
@@ -229,11 +238,16 @@ def invoke_agent(message: str, session_id: str, executor=None, retries: int = 2)
     for attempt in range(retries + 1):
         try:
             response = ex.invoke(
-                {"input": enriched_message, "chat_history": memory.chat_memory.messages}
+                {
+                    "input": enriched_message,
+                    "chat_history": memory.chat_memory.messages,
+                    **current_datetime_vars(),
+                }
             )
             output = response["output"]
             memory.chat_memory.add_user_message(message)
             memory.chat_memory.add_ai_message(output)
+            persist_turn(session_id, message, output)  # survive restarts
             _set_cache(message, output)
             return output
         except Exception as e:
