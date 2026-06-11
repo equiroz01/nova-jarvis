@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 # Patch settings BEFORE importing anything that reads them at module level
 # ---------------------------------------------------------------------------
 @pytest.fixture(autouse=True)
-def _patch_settings(monkeypatch):
+def _patch_settings(monkeypatch, tmp_path):
     """Ensure every test gets safe, deterministic settings."""
     monkeypatch.setenv("GEMINI_API_KEY", "test-gemini-key")
     monkeypatch.setenv("ALLOWED_ORIGINS", "*")
@@ -27,6 +27,21 @@ def _patch_settings(monkeypatch):
     monkeypatch.setenv("HOME_ASSISTANT_URL", "http://ha-test.local:8123")
     monkeypatch.setenv("HOME_ASSISTANT_TOKEN", "test-ha-token")
     monkeypatch.setenv("ALEXA_SKILL_ID", "amzn1.ask.skill.test")
+    # Isolate durable state (task + session SQLite) to a per-test temp dir, and
+    # reset the cached connection / in-memory session cache so no state bleeds
+    # across tests or into the real ~/.nova/data DB.
+    monkeypatch.setenv("NOVA_HOME", str(tmp_path))
+    import app.agent.session as _session
+    import app.agent.session_store as _session_store
+    _session._sessions.clear()
+    if _session_store._conn is not None:
+        _session_store._conn.close()
+        _session_store._conn = None
+    yield
+    _session._sessions.clear()
+    if _session_store._conn is not None:
+        _session_store._conn.close()
+        _session_store._conn = None
 
 
 @pytest.fixture()

@@ -29,6 +29,11 @@ def load_model():
     _get_model()
 
 
+def is_loaded() -> bool:
+    """True if the Whisper model is loaded and ready (for /health probes)."""
+    return _model is not None
+
+
 def transcribe_audio(
     audio_bytes: bytes,
     language_code: str = None,

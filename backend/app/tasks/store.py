@@ -78,6 +78,14 @@ async def close_db():
         _db = None
 
 
+async def healthcheck() -> bool:
+    """True if the task DB is connected and queryable (for /health probes)."""
+    if _db is None:
+        return False
+    await _db.execute_fetchall("SELECT 1")
+    return True
+
+
 async def create(task_in: TaskCreate) -> Task:
     """Create a new task."""
     task = Task(
