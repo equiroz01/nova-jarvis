@@ -3,6 +3,10 @@
 Cliente nativo de N.O.V.A. para iOS y Android. Habla con el backend FastAPI
 (que corre en el Mac Studio) a través de tu túnel/dominio público.
 
+Proyecto EAS: **[`@hypernovalabs/nova-mobile`](https://expo.dev/accounts/hypernovalabs/projects/nova-mobile)**
+(org `hypernovalabs`, bundle `com.hypernovalabs.nova`). Ya está enlazado — el
+`projectId` vive en `app.json` (`extra.eas.projectId`).
+
 ## Qué hace
 
 - **Chat de texto** con respuesta en streaming (`/chat/stream`, SSE) — muestra
@@ -40,32 +44,72 @@ npx expo start          # escanea el QR con Expo Go (chat funciona; la voz neces
 
 ## Builds (EAS)
 
-Requiere una cuenta Expo (gratis) y el CLI:
+El proyecto ya está enlazado a expo.dev, así que **no** hace falta `eas init` /
+`build:configure`. Solo necesitas el CLI y estar logueado en la cuenta correcta:
 
 ```bash
 npm i -g eas-cli
-eas login
-eas build:configure        # crea el projectId la primera vez
+eas login                  # usuario con acceso a la org `hypernovalabs`
+eas whoami
 ```
 
-Perfiles definidos en `eas.json`:
+Perfiles definidos en `eas.json` (`development` / `preview` / `production`):
 
 ```bash
-# Development build (módulos nativos + hot reload)
-eas build --profile development --platform android
+# Preview — IPA ad-hoc (iOS) / APK instalable directo (Android)
+eas build --profile preview --platform ios
+eas build --profile preview --platform android
+
+# Development build (módulos nativos + dev client)
 eas build --profile development --platform ios
 
-# Preview — APK instalable directo (Android) / IPA ad-hoc (iOS)
-eas build --profile preview --platform android
-eas build --profile preview --platform ios
-
-# Producción — AAB para Play Store / build para App Store
+# Producción — build para App Store / AAB para Play Store
 eas build --profile production --platform all
 ```
 
-- **Android**: el perfil `preview` genera un **APK** que instalas directo en el teléfono.
-- **iOS**: para instalar en un dispositivo físico necesitas cuenta Apple Developer
-  ($99/año). Sin ella puedes correr en el simulador con el perfil `development`.
+- **iOS (preview/production)**: requiere cuenta **Apple Developer** ($99/año; ya
+  configurada: team *Hypernova Labs S.A.*). EAS genera el certificado de
+  distribución y el provisioning ad-hoc automáticamente.
+  - Para instalar en un iPhone físico hay que **registrar su UDID** una vez:
+    ```bash
+    eas device:create        # elige "Website" → abre el link/QR EN el iPhone e instala el perfil
+    ```
+    Luego el `eas build` incluye ese dispositivo en el provisioning. Para instalar,
+    abre la página del build terminado **en el iPhone** y toca *Install* (OTA ad-hoc).
+  - Sin dispositivo físico, usa el perfil `development` con `"ios": { "simulator": true }`.
+- **Android**: el perfil `preview` genera un **APK** que instalas directo.
+
+### OTA updates (EAS Update)
+
+`expo-updates` está configurado (canal `production`). Publicar JS sin recompilar:
+
+```bash
+eas update --branch production --message "..."
+```
+
+> Los OTA solo los reciben builds ya instalados con el mismo `runtimeVersion`
+> (`app.json` → `runtimeVersion.policy = "appVersion"`, hoy `1.0.0`). Un cambio
+> nativo (dependencias, permisos) sí requiere un build nuevo.
+
+### ⚠️ Gotcha: `*.json` del `.gitignore` raíz
+
+El `.gitignore` de la **raíz del repo** (`jarvis/`) tiene un `*.json` global. EAS
+arma el archive de subida filtrando con los `.gitignore` desde el git root, así que
+ese patrón **borraba `package.json` / `app.json` / `eas.json` / `package-lock.json`**
+del paquete y el build fallaba en `PRE_INSTALL_HOOK` con
+`package.json does not exist in build/mobile`.
+
+El fix vive en el **`.gitignore` raíz** (no en `mobile/.gitignore`: EAS evalúa cada
+`.gitignore` como un OR independiente, y la negación de un hijo no revierte la regla
+del padre):
+
+```gitignore
+!mobile/*.json
+!mobile/**/*.json
+```
+
+No borres esas líneas ni muevas la negación a `mobile/.gitignore`, o los builds de
+EAS volverán a romperse.
 
 ## Configuración en el primer arranque
 
