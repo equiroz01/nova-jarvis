@@ -79,6 +79,35 @@ eas build --profile production --platform all
   - Sin dispositivo físico, usa el perfil `development` con `"ios": { "simulator": true }`.
 - **Android**: el perfil `preview` genera un **APK** que instalas directo.
 
+### Producción iOS (App Store / TestFlight)
+
+El perfil `production` no tiene `distribution: internal`, así que EAS hace un build
+de **distribución App Store** (no se instala directo: va a App Store Connect). El
+`buildNumber` se autoincrementa solo (`appVersionSource: "remote"` + `autoIncrement`),
+y `ITSAppUsesNonExemptEncryption: false` ya evita el prompt de export compliance.
+
+```bash
+eas build -p ios --profile production     # corre en modo interactivo la 1ª vez
+```
+
+La primera vez pide **login de Apple (2FA)** para crear las credenciales de store
+(no se pueden generar en `--non-interactive`):
+- **Distribution Certificate** → acepta el default (reutiliza el "Apple Distribution"
+  del ad-hoc; el mismo cert sirve para ad-hoc y App Store).
+- **App Store provisioning profile** → deja que EAS lo genere.
+
+Subir el `.ipa` a App Store Connect → TestFlight:
+
+```bash
+eas submit -p ios --profile production
+```
+
+- Necesita un **app record en App Store Connect** para `com.hypernovalabs.nova`
+  (créalo en appstoreconnect.apple.com, o deja que `eas submit` lo cree).
+- Autenticación recomendada: **App Store Connect API key** (no expira con 2FA);
+  configúrala en `eas.json` → `submit.production.ios` o deja que `eas submit` la pida.
+- De TestFlight se envía a revisión de App Store desde la consola web.
+
 ### OTA updates (EAS Update)
 
 `expo-updates` está configurado (canal `production`). Publicar JS sin recompilar:
