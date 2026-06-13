@@ -1,8 +1,6 @@
 """Agent delegation tool — lets NOVA call Vertex AI agents in real-time."""
 
-import asyncio
 import logging
-import uuid
 from langchain.tools import tool
 
 logger = logging.getLogger(__name__)
@@ -22,6 +20,7 @@ def delegate_to_agent(agent_name: str, message: str) -> str:
     try:
         from app.vertex_agents.registry import find_agent_by_name, get_enabled_agents
         from app.vertex_agents.client import query_agent
+        from app.agent.orchestrator import get_current_client_id
 
         agent = find_agent_by_name(agent_name)
         if not agent:
@@ -32,8 +31,8 @@ def delegate_to_agent(agent_name: str, message: str) -> str:
                 f"Available agents: {', '.join(names) if names else 'none configured'}"
             )
 
-        session_id = f"nova-rt-{uuid.uuid4().hex[:8]}"
-        response = query_agent(agent, session_id, message)
+        client_id = get_current_client_id()
+        response = query_agent(agent, session_id="", message=message, client_id=client_id)
 
         if response.startswith("Error:"):
             return response

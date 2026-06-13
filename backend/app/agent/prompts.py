@@ -187,13 +187,26 @@ def _build_persona_block(persona: dict) -> str:
     return "\n".join(lines)
 
 
+def current_datetime_vars(tz_name: str = None) -> dict:
+    """Compute the time-derived prompt variables. Called at INVOKE time so the
+    executor can be built once and still see the correct date/time every turn."""
+    if tz_name is None:
+        tz_name = _load_persona().get("user", {}).get("timezone", "America/Panama")
+    now = datetime.now(pytz.timezone(tz_name))
+    return {
+        "current_date": now.strftime("%B %d, %Y"),
+        "current_time": now.strftime("%I:%M %p"),
+        "year": now.strftime("%Y"),
+    }
+
+
 def build_prompt() -> ChatPromptTemplate:
-    """Build prompt with current date/time and persona injected."""
+    """Build the prompt template ONCE. Persona/timezone are baked in; date/time
+    stay as `{current_date}` / `{current_time}` / `{year}` template variables that
+    are supplied fresh at invoke time (see current_datetime_vars)."""
     persona = _load_persona()
 
     tz_name = persona.get("user", {}).get("timezone", "America/Panama")
-    now = datetime.now(pytz.timezone(tz_name))
-
     persona_block = _build_persona_block(persona)
 
     # Dynamic Vertex AI agent list
@@ -203,11 +216,12 @@ def build_prompt() -> ChatPromptTemplate:
     except Exception:
         vertex_block = ""
 
+    # Format the static fields; leave the time-derived ones as passthrough
+    # placeholders so ChatPromptTemplate treats them as runtime input variables.
     prompt_text = SYSTEM_TEMPLATE.format(
-        current_date=now.strftime("%B %d, %Y"),
-        current_time=now.strftime("%I:%M %p"),
-        day_of_week=now.strftime("%A"),
-        year=now.strftime("%Y"),
+        current_date="{current_date}",
+        current_time="{current_time}",
+        year="{year}",
         timezone=tz_name,
         persona_block=persona_block,
         vertex_agents_block=vertex_block,

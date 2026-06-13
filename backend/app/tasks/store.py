@@ -30,6 +30,7 @@ async def init_db():
     _db.row_factory = aiosqlite.Row
 
     await _db.execute("PRAGMA journal_mode=WAL")
+    await _db.execute("PRAGMA busy_timeout=8000")
     await _db.execute("""
         CREATE TABLE IF NOT EXISTS tasks (
             id TEXT PRIMARY KEY,
@@ -76,6 +77,14 @@ async def close_db():
     if _db:
         await _db.close()
         _db = None
+
+
+async def healthcheck() -> bool:
+    """True if the task DB is connected and queryable (for /health probes)."""
+    if _db is None:
+        return False
+    await _db.execute_fetchall("SELECT 1")
+    return True
 
 
 async def create(task_in: TaskCreate) -> Task:

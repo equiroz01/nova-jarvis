@@ -1,9 +1,14 @@
 // fillers.js — Filler phrases, greeting, pre-cache
 
-import { playAudio } from './audio.js';
+import { playAudio, isPlaying } from './audio.js';
 
 let API;
 let isFirstMessage = true;
+
+// Client-side audio pool: category -> [{text, audio_base64}], preloaded at init
+// so fillers play with ZERO network roundtrip.
+let _fillerPool = {};
+const _recentPoolTexts = [];
 
 const FILLER_BANK = {
   general: [
@@ -114,6 +119,51 @@ function detectQueryType(msg) {
   return 'general';
 }
 
+function preloadFillerPool() {
+  fetch(API + '/filler/preload?per_category=6')
+    .then(r => r.json())
+    .then(pool => { _fillerPool = pool || {}; })
+    .catch(() => {});
+}
+
+/**
+ * Play a filler from the local pool instantly (no network). Returns the text,
+ * or null if the pool has nothing for this category.
+ */
+function playPoolFiller(qtype) {
+  const bank = _fillerPool[qtype] || _fillerPool.general || [];
+  if (!bank.length) return null;
+  const available = bank.filter(f => !_recentPoolTexts.includes(f.text));
+  const pick = (available.length ? available : bank)[Math.floor(Math.random() * (available.length ? available.length : bank.length))];
+  _recentPoolTexts.push(pick.text);
+  if (_recentPoolTexts.length > 5) _recentPoolTexts.shift();
+  if (pick.audio_base64) playAudio(pick.audio_base64, 'filler');
+  return pick.text;
+}
+
+// ── Follow-up filler loop: while a request is processing, drop a "ya casi..."
+// every few seconds so there's never dead silence. Never talks over audio.
+let _fillerLoopTimer = null;
+let _fillerLoopQtype = 'general';
+const FILLER_FOLLOWUP_MS = 6000;
+
+export function setFillerLoopType(qtype) {
+  _fillerLoopQtype = qtype || 'general';
+}
+
+export function startFillerLoop(qtype) {
+  stopFillerLoop();
+  _fillerLoopQtype = qtype || 'general';
+  _fillerLoopTimer = setInterval(() => {
+    if (isPlaying()) return; // never talk over filler or response audio
+    playPoolFiller(_fillerLoopQtype);
+  }, FILLER_FOLLOWUP_MS);
+}
+
+export function stopFillerLoop() {
+  if (_fillerLoopTimer) { clearInterval(_fillerLoopTimer); _fillerLoopTimer = null; }
+}
+
 // Pre-cache greeting audio
 let _greetingAudioB64 = null;
 let _greetingText = null;
@@ -153,7 +203,11 @@ export async function speakFiller(queryHint) {
 
   const qtype = detectQueryType(queryHint);
 
-  // Single source: backend picks text + provides matching pre-cached audio
+  // Local pool first: instant playback, zero roundtrip
+  const poolText = playPoolFiller(qtype);
+  if (poolText) return poolText;
+
+  // Fallback: backend picks text + provides matching pre-cached audio
   try {
     const r = await fetch(API + '/filler', {
       method: 'POST',
@@ -188,4 +242,5 @@ export function speakInterrupt() {
 export function init(config) {
   API = config.API;
   preloadGreeting();
+  preloadFillerPool();
 }

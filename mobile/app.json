@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "NOVA",
+    "slug": "nova-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "nova",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0A0E14",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.hypernovalabs.nova",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "NOVA usa el micrófono para que puedas hablarle con la voz.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.hypernovalabs.nova",
+      "adaptiveIcon": {
+        "backgroundColor": "#0A0E14",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "RECORD_AUDIO",
+        "INTERNET"
+      ],
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "NOVA usa el micrófono para que puedas hablarle con la voz."
+        }
+      ],
+      "expo-secure-store",
+      "expo-asset"
+    ]
+  }
+}

@@ -4,16 +4,44 @@ from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
 from typing import Any
 
+from app.config import settings
 from app.agent.orchestrator import invoke_agent
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _verify_alexa_request(body: dict) -> None:
+    """Gate the public /alexa endpoint by Amazon skill ID.
+
+    /alexa has no API key (Amazon controls the request), so it is reachable by
+    anyone who finds the tunnel URL. Without this check, a forged Alexa JSON POST
+    runs the agent — sending email, hitting the calendar, controlling devices.
+
+    Requiring ALEXA_SKILL_ID to be configured makes the endpoint fail CLOSED:
+    an unconfigured public agent endpoint is the hole, so we reject rather than
+    run the agent for anyone. This is not a substitute for full Signature-256
+    cert-chain verification, but it stops casual abuse. See NOVA_RELIABILITY_PLAN 1.3.
+    """
+    if not settings.alexa_skill_id:
+        logger.warning("Rejected /alexa request: ALEXA_SKILL_ID not configured (endpoint fails closed)")
+        raise HTTPException(status_code=403, detail="Alexa skill not configured")
+
+    app_id = (
+        body.get("session", {}).get("application", {}).get("applicationId")
+        or body.get("context", {}).get("System", {}).get("application", {}).get("applicationId")
+        or ""
+    )
+    if app_id != settings.alexa_skill_id:
+        logger.warning("Rejected /alexa request: skill ID mismatch")
+        raise HTTPException(status_code=403, detail="Invalid skill ID")
+
+
 @router.post("/alexa")
 async def alexa_webhook(req: Request):
     """Handle incoming Alexa skill requests. Alexa sends JSON with intent/slot data."""
     body = await req.json()
+    _verify_alexa_request(body)
 
     request_type = body.get("request", {}).get("type", "")
 

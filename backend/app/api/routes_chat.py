@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import json
 import logging
@@ -15,6 +16,7 @@ router = APIRouter()
 class ChatRequest(BaseModel):
     message: str
     session_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    client_id: str = Field(default="default", description="Client identifier for session isolation")
     tts: bool = Field(default=True, description="Generate TTS audio in response")
 
 
@@ -39,7 +41,7 @@ async def chat(request: ChatRequest, req: Request):
 
     executor = req.app.state.agent_executor
     try:
-        output = invoke_agent(request.message, request.session_id, executor)
+        output = invoke_agent(request.message, request.session_id, executor, client_id=request.client_id)
 
         audio_b64 = None
         if request.tts:
@@ -91,6 +93,14 @@ async def filler_endpoint(request: FillerRequest):
     return FillerResponse(text=text, audio_base64=audio_b64)
 
 
+@router.get("/filler/preload")
+async def filler_preload(per_category: int = 4):
+    """Bundle of filler audios per category for client-side caching.
+    The browser plays these with zero roundtrip while requests process."""
+    from app.services.filler_cache import get_preload_bundle
+    return get_preload_bundle(per_category=min(per_category, 8))
+
+
 class TTSChunkedRequest(BaseModel):
     text: str
 
@@ -101,7 +111,7 @@ async def tts_chunked(request: TTSChunkedRequest):
     Client starts playing the first sentence while the rest are still generating."""
     import re
     from fastapi.responses import StreamingResponse
-    from app.services.tts import synthesize_speech
+    from app.services.tts import _synthesize_async
 
     text = request.text.strip()
     if not text:
@@ -123,16 +133,22 @@ async def tts_chunked(request: TTSChunkedRequest):
         sentences.append(buf)
 
     async def generate():
-        for s in sentences:
+        # Pipeline: synthesize sentence n+1 while n streams to the client.
+        next_task = asyncio.ensure_future(_synthesize_async(sentences[0]))
+        for i, s in enumerate(sentences):
             try:
-                audio = synthesize_speech(s)
+                audio = await next_task
+            except Exception as e:
+                logger.warning(f"TTS chunk failed: {e}")
+                audio = None
+            if i + 1 < len(sentences):
+                next_task = asyncio.ensure_future(_synthesize_async(sentences[i + 1]))
+            if audio:
                 chunk = {
                     "text": s,
                     "audio_base64": base64.b64encode(audio).decode("utf-8"),
                 }
                 yield json.dumps(chunk) + "\n"
-            except Exception as e:
-                logger.warning(f"TTS chunk failed: {e}")
 
     return StreamingResponse(
         generate(),

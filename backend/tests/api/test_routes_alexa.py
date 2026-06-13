@@ -2,11 +2,18 @@
 
 from unittest.mock import patch
 
+# Matches ALEXA_SKILL_ID set in conftest._patch_settings. Every real Alexa request
+# carries this applicationId, and /alexa now gates on it (fail-closed) — see 1.3.
+TEST_SKILL_ID = "amzn1.ask.skill.test"
+
 
 def _alexa_request(request_type, intent_name=None, slots=None, user_id="user-123"):
     """Helper to build an Alexa-shaped JSON body."""
     body = {
-        "session": {"user": {"userId": user_id}},
+        "session": {
+            "user": {"userId": user_id},
+            "application": {"applicationId": TEST_SKILL_ID},
+        },
         "request": {"type": request_type},
     }
     if intent_name:
@@ -136,3 +143,35 @@ class TestAlexaResponseFormat:
         body = _alexa_request("LaunchRequest")
         data = client.post("/alexa", json=body).json()
         assert data["response"]["outputSpeech"]["type"] == "PlainText"
+
+
+class TestAlexaSkillIdGate:
+    """The /alexa endpoint is public (Amazon controls the request), so it must
+    fail closed: reject anything not carrying the configured skill ID."""
+
+    def test_should_Reject_when_SkillIdMissing(self, client):
+        body = {"request": {"type": "LaunchRequest"}, "session": {}}
+        resp = client.post("/alexa", json=body)
+        assert resp.status_code == 403
+
+    def test_should_Reject_when_SkillIdMismatch(self, client):
+        body = _alexa_request("LaunchRequest")
+        body["session"]["application"]["applicationId"] = "amzn1.ask.skill.ATTACKER"
+        resp = client.post("/alexa", json=body)
+        assert resp.status_code == 403
+
+    def test_should_Accept_when_SkillIdInContextOnly(self, client):
+        # SessionEndedRequest et al. carry the id under context.System, not session
+        body = {
+            "request": {"type": "LaunchRequest"},
+            "context": {"System": {"application": {"applicationId": TEST_SKILL_ID}}},
+        }
+        resp = client.post("/alexa", json=body)
+        assert resp.status_code == 200
+
+    def test_should_Reject_when_SkillIdNotConfigured(self, client, monkeypatch):
+        from app.config import settings
+        monkeypatch.setattr(settings, "alexa_skill_id", None)
+        body = _alexa_request("LaunchRequest")
+        resp = client.post("/alexa", json=body)
+        assert resp.status_code == 403

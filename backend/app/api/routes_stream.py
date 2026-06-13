@@ -139,6 +139,7 @@ def _pick_filler(query_type: str) -> str:
 class StreamRequest(BaseModel):
     message: str
     session_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    client_id: str = Field(default="default", description="Client identifier for session isolation")
 
 
 @router.post("/chat/stream")
@@ -164,12 +165,11 @@ async def chat_stream(request: StreamRequest):
             await asyncio.sleep(0)
 
             # Run LLM in thread pool so the filler yield above flushes first
+            import functools
             loop = asyncio.get_event_loop()
             output = await loop.run_in_executor(
                 _executor_pool,
-                invoke_agent,
-                request.message,
-                request.session_id,
+                functools.partial(invoke_agent, request.message, request.session_id, client_id=request.client_id),
             )
 
             # Stream actual response in chunks
