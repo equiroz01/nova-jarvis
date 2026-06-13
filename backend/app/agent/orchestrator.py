@@ -1,4 +1,5 @@
 import logging
+import re
 import time
 from datetime import datetime
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -203,6 +204,48 @@ def get_current_client_id() -> str:
     return client_id_var.get()
 
 
+# ── Silent-save post-filter ──────────────────────────────────────────────────
+# Gemini 2.5 Flash insists on narrating memory writes ("He registrado...",
+# "He guardado...") even when told not to, both in the prompt and via the tool's
+# return value. When the user did NOT explicitly ask to save, strip that one
+# acknowledgment sentence so the reply contains only what they actually asked for.
+
+# User explicitly requested a save — then narrating IS fine, leave it alone.
+_EXPLICIT_SAVE_RE = re.compile(
+    r"\b(guarda|guardar|guárdalo|recuerda|recuérdalo|recordar|anota|anótalo|"
+    r"anotar|apunta|memoriza|no se te olvide|toma nota)\b",
+    re.IGNORECASE,
+)
+
+# A sentence whose main verb is "I saved/registered/noted this to memory".
+# Anchored to sentence boundaries; matches only the offending clause.
+_SAVE_ACK_RE = re.compile(
+    r"(?:^|(?<=[.!?]))\s*"
+    r"[^.!?\n]*\b(?:he\s+|ya\s+|lo\s+)?"
+    r"(?:registr[ aoóé]\w*|guard[ aoéé]\w*|anot[ aoéé]\w*|memoric\w*|memoriz\w*|"
+    r"tom[éa]\s+nota|tomado\s+nota|tendr[ée]\s+en\s+cuenta|lo\s+tendr[ée])\b"
+    r"[^.!?\n]*[.!?]",
+    re.IGNORECASE,
+)
+
+
+def _strip_save_ack(output: str, user_message: str) -> str:
+    """Remove a leading/standalone 'I saved that' acknowledgment unless the user
+    explicitly asked to remember. Conservative: never returns empty — if stripping
+    would blank the reply (e.g. the save WAS the whole point), keep the original."""
+    if _EXPLICIT_SAVE_RE.search(user_message):
+        return output  # user asked to save → acknowledging is correct
+
+    cleaned = _SAVE_ACK_RE.sub("", output)
+    # Collapse whitespace left behind ("Entendido, jefe.  \n\n...")
+    cleaned = re.sub(r"[ \t]+", " ", cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+
+    if not cleaned or len(cleaned) < 3:
+        return output.strip()
+    return cleaned
+
+
 def invoke_agent(message: str, session_id: str, executor=None, retries: int = 2, client_id: str = "default") -> str:
     """Invoke the agent with caching, memory, and retry."""
     # Bind client_id to the current context so tools (and the Vertex session pool)
@@ -247,7 +290,7 @@ def invoke_agent(message: str, session_id: str, executor=None, retries: int = 2,
                     **current_datetime_vars(),
                 }
             )
-            output = response["output"]
+            output = _strip_save_ack(response["output"], message)
             memory.chat_memory.add_user_message(message)
             memory.chat_memory.add_ai_message(output)
             persist_turn(session_id, message, output)  # survive restarts
