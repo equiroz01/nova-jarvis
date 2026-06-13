@@ -28,3 +28,12 @@ NOVA_CONTEXT_COMPACT.md
 
 # Node deps for the mobile app (mobile/.gitignore also covers this)
 node_modules/
+
+# The broad `*.json` above also matches the Expo app's config
+# (mobile/package.json, app.json, eas.json, package-lock.json). Those MUST be
+# tracked and shipped to EAS Build, so re-include JSON under mobile/. Must live
+# in THIS root file: EAS's archive ignore evaluates each .gitignore as an
+# independent OR, so a negation in mobile/.gitignore can't override this rule.
+# node_modules/ JSON stays excluded (can't re-include under an excluded dir).
+!mobile/*.json
+!mobile/**/*.json
