@@ -4,9 +4,9 @@
 
 import bus from './eventbus.js';
 import { addMessage, hideWelcome } from './messages.js';
-import { playAudioAsync, stopAudio } from './audio.js';
+import { playAudio, playAudioAsync, stopAudio } from './audio.js';
 import { speakTextAsync } from './tts.js';
-import { speakFiller, speakInterrupt } from './fillers.js';
+import { speakFiller, speakInterrupt, startFillerLoop, stopFillerLoop, setFillerLoopType } from './fillers.js';
 import { samplesToWav } from './voice.js';
 import { setInputMode } from './chat.js';
 
@@ -26,12 +26,17 @@ let hfSpeechDetected = false;
 let hfRAF = null;
 let hfMuted = false;
 
-const VAD_SILENCE_MS = 2000;      // 2s of silence to end utterance (was 1.5 — too short for natural pauses)
+const VAD_SILENCE_MS = 1200;      // 1.2s of silence to end utterance — snappier turns
 const VAD_MIN_SPEECH_MS = 400;    // 400ms minimum speech to count (filters coughs/clicks)
-const VAD_RESUME_DELAY_MS = 1000; // 1s after NOVA speaks before listening again
+const VAD_RESUME_DELAY_MS = 400;  // 0.4s after NOVA speaks before listening again
 const VAD_MARGIN = 20;            // dB above noise floor to detect speech (was 25 — too high)
 const VAD_CALIBRATION_MS = 3000;  // 3s noise floor calibration
 const VAD_MIN_THRESHOLD = 20;     // absolute minimum threshold
+// Pre-roll: keep the last ~768ms of audio at all times. When speech triggers,
+// prepend it so the first word's onset isn't clipped (clipped onsets were the
+// main cause of misrecognition — Whisper hallucinates on truncated words).
+const PREROLL_CHUNKS = 3; // 3 × 4096 samples @ 16kHz ≈ 768ms
+let hfPreroll = [];
 let hfSpeechStart = 0;
 let hfNoiseFloor = 20;
 let hfCalibrating = false;
@@ -128,6 +133,7 @@ function hfMute() {
 function hfUnmute() {
   hfMuted = false;
   hfSamples = [];
+  hfPreroll = [];
   hfSpeechDetected = false;
   hfSilenceStart = 0;
   cancelAnimationFrame(_interruptRAF);
@@ -155,7 +161,8 @@ function startInterruptMonitor() {
       hfUnmute();
       hfSpeechDetected = true;
       hfSpeechStart = Date.now();
-      hfSamples = [];
+      hfSamples = hfPreroll.slice();
+      hfPreroll = [];
       setHfState('speech');
       hfVADLoop();
       return;
@@ -193,7 +200,8 @@ function hfVADLoop() {
       clearHudText(); // Fade out previous conversation
       hfSpeechDetected = true;
       hfSpeechStart = now;
-      hfSamples = [];
+      hfSamples = hfPreroll.slice(); // prepend pre-roll so word onset isn't clipped
+      hfPreroll = [];
       setHfState('speech');
     }
   } else if (hfState === 'speech') {
@@ -237,37 +245,65 @@ async function hfSendAudio() {
   // Process command directly — no wake word needed
   hideWelcome();
 
-  const filler = speakFiller('general');
-  if (hudR) hudR.textContent = filler;
+  // Initial filler covers STT time; follow-up loop covers long agent calls.
+  speakFiller('general');
+  startFillerLoop('general');
 
   const form = new FormData();
   form.append('audio', wavBlob, 'recording.wav');
   form.append('session_id', sessionId);
+  form.append('tts', 'false'); // we re-synthesize per sentence via /tts/chunked
 
   try {
-    const r = await fetch(API + '/voice', { method: 'POST', body: form });
-    const data = await r.json();
+    const r = await fetch(API + '/voice/stream', { method: 'POST', body: form });
+    const reader = r.body.pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = '';
+    let finalData = null;
 
-    // Stop filler
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += value;
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        let event;
+        try { event = JSON.parse(line); } catch (e) { continue; }
+
+        if (event.type === 'transcript') {
+          // STT done — show transcript, switch to a context-aware filler
+          addMessage(event.transcript, 'user');
+          if (hudT) hudT.textContent = '"' + event.transcript + '"';
+          setFillerLoopType(event.query_type || 'general');
+          if (event.filler_audio_base64) {
+            playAudio(event.filler_audio_base64, 'filler');
+            if (hudR) hudR.textContent = event.filler_text || '';
+          }
+        } else if (event.type === 'result') {
+          finalData = event;
+        } else if (event.type === 'error') {
+          console.error('Voice stream error:', event.detail);
+        }
+      }
+    }
+
+    // Stop fillers before speaking the real response
+    stopFillerLoop();
     stopAudio('filler');
 
-    if (!data.transcript && !data.response) {
-      // No speech
-    } else {
-      if (data.transcript) {
-        addMessage(data.transcript, 'user');
-        if (hudT) hudT.textContent = '"' + data.transcript + '"';
-      }
-      if (data.response) {
-        addMessage(data.response, 'jarvis');
-      }
-
+    if (finalData && finalData.response) {
+      addMessage(finalData.response, 'jarvis');
       setHfState('speaking');
       startInterruptMonitor();
-      await playChunkedHF(data.response);
+      await playChunkedHF(finalData.response);
     }
   } catch (e) {
     console.error('Voice error:', e);
+  } finally {
+    stopFillerLoop();
+    stopAudio('filler');
   }
 
   // Resume listening
@@ -284,7 +320,7 @@ async function startHandsfree() {
   if (hfActive) return;
   try {
     hfStream = await navigator.mediaDevices.getUserMedia({
-      audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true }
+      audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
     });
     hfContext = new AudioContext({ sampleRate: 16000 });
     hfSource = hfContext.createMediaStreamSource(hfStream);
@@ -295,8 +331,13 @@ async function startHandsfree() {
 
     hfProcessor = hfContext.createScriptProcessor(4096, 1, 1);
     hfProcessor.onaudioprocess = (e) => {
+      const data = new Float32Array(e.inputBuffer.getChannelData(0));
       if (hfSpeechDetected) {
-        hfSamples.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+        hfSamples.push(data);
+      } else {
+        // Rolling pre-roll buffer while idle
+        hfPreroll.push(data);
+        while (hfPreroll.length > PREROLL_CHUNKS) hfPreroll.shift();
       }
     };
     hfSource.connect(hfProcessor);

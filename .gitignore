@@ -21,3 +21,10 @@ knowledge_data/
 
 .agilitytask/
 backend/mcp_config.yaml
+
+# Fable context dumps — derived scratch (duplicate source), not real artifacts
+NOVA_FULL_CONTEXT.md
+NOVA_CONTEXT_COMPACT.md
+
+# Node deps for the mobile app (mobile/.gitignore also covers this)
+node_modules/

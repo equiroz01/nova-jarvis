@@ -108,6 +108,22 @@ def get_filler(query_type: str = "general") -> tuple[str, bytes]:
     return (phrase, _audio_cache.get(phrase, b""))
 
 
+def get_preload_bundle(per_category: int = 4) -> dict[str, list[dict]]:
+    """Random sample of cached fillers per category, for client-side preload.
+    Returns {category: [{text, audio_base64}, ...]} so the browser can play
+    fillers instantly with zero network roundtrip."""
+    import base64
+    bundle = {}
+    for cat, phrases in FILLERS.items():
+        cached = [p for p in phrases if p in _audio_cache]
+        sample = random.sample(cached, min(per_category, len(cached)))
+        bundle[cat] = [
+            {"text": p, "audio_base64": base64.b64encode(_audio_cache[p]).decode("utf-8")}
+            for p in sample
+        ]
+    return bundle
+
+
 def detect_query_type(msg: str) -> str:
     """Detect query type from message text."""
     lower = msg.lower()

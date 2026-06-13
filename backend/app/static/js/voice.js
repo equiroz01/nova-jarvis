@@ -2,7 +2,7 @@
 
 import { addMessage, hideWelcome, hideTyping } from './messages.js';
 import { playAudio, stopAudio } from './audio.js';
-import { speakFiller } from './fillers.js';
+import { speakFiller, startFillerLoop, stopFillerLoop, setFillerLoopType } from './fillers.js';
 import { startLiveWaveform, stopLiveWaveform } from './waveform.js';
 
 let API;
@@ -125,8 +125,10 @@ function toggleRecording() {
 async function sendVoice(blob) {
   hideWelcome();
 
-  // PARALLEL: filler plays while /voice processes
+  // PARALLEL: filler plays while the backend processes; follow-up loop
+  // covers long agent calls so there's never dead silence.
   speakFiller('general');
+  startFillerLoop('general');
 
   const form = new FormData();
   form.append('audio', blob, 'recording.wav');
@@ -134,15 +136,44 @@ async function sendVoice(blob) {
   form.append('language', 'es');
 
   try {
-    const r = await fetch(API + '/voice', { method: 'POST', body: form });
-    const data = await r.json();
-    // Stop filler
+    const r = await fetch(API + '/voice/stream', { method: 'POST', body: form });
+    const reader = r.body.pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = '';
+    let finalData = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += value;
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        let event;
+        try { event = JSON.parse(line); } catch (e) { continue; }
+
+        if (event.type === 'transcript') {
+          // STT done — show transcript, switch to a context-aware filler
+          addMessage(event.transcript, 'user');
+          setFillerLoopType(event.query_type || 'general');
+          if (event.filler_audio_base64) playAudio(event.filler_audio_base64, 'filler');
+        } else if (event.type === 'result') {
+          finalData = event;
+        }
+      }
+    }
+
+    stopFillerLoop();
     stopAudio('filler');
-    if (data.transcript) addMessage(data.transcript, 'user');
-    if (data.response) addMessage(data.response, 'jarvis');
-    if (data.audio_base64) playAudio(data.audio_base64, 'response');
+    if (finalData) {
+      if (finalData.response) addMessage(finalData.response, 'jarvis');
+      if (finalData.audio_base64) playAudio(finalData.audio_base64, 'response');
+    }
     updateMicState('idle');
   } catch (e) {
+    stopFillerLoop();
+    stopAudio('filler');
     hideTyping();
     addMessage('Voice processing failed. Check backend.', 'jarvis');
     updateMicState('idle');
