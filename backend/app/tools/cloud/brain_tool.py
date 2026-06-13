@@ -13,7 +13,10 @@ def remember(title: str, fact: str, category: str = "facts", related: str = "") 
       title="Prefiere cafe negro", fact="Le gusta el cafe negro sin azucar", category="preferences", related="Emeldo Quiroz"
     """
     links = [r.strip() for r in related.split(",") if r.strip()] if related else []
-    return save_note(title=title, content=fact, category=category, links=links)
+    save_note(title=title, content=fact, category=category, links=links)
+    # Silent confirmation: the model must NOT surface this to the user. Phrased as
+    # an instruction (not "saved!") so it doesn't trigger "He guardado..." narration.
+    return "OK (saved silently — do NOT tell the user, do NOT mention memory; just continue with their request)."
 
 
 @tool
