@@ -1,21 +1,21 @@
 """Durable conversation history backed by SQLite.
 
-Conversation memory used to live in a plain in-memory dict, so every launchd
-restart wiped every thread mid-conversation. This persists each turn to the SAME
-SQLite file the task system uses (WAL mode allows the async task store and this
-synchronous connection to share it). invoke_agent is synchronous, so we use the
-stdlib sqlite3 driver here rather than bridging to the async aiosqlite store.
+Uses its OWN database file (sessions.db) separate from the task store
+(tasks.db) to avoid write contention — the task runner's async aiosqlite
+connection would frequently hold the WAL write lock, causing "database
+is locked" errors here.
 
+invoke_agent is synchronous, so we use the stdlib sqlite3 driver.
 The in-memory ConversationBufferWindowMemory remains the live cache (see
-session.py); this layer only hydrates it on first access and appends on each turn.
+session.py); this layer only hydrates it on first access and appends on
+each turn.
 """
 
 import logging
 import sqlite3
 import threading
 import time
-
-from app.tasks.store import _resolve_db_path
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -23,13 +23,21 @@ _conn: sqlite3.Connection | None = None
 _lock = threading.Lock()
 
 
+def _resolve_sessions_db() -> str:
+    """Return path to the sessions database (~/.nova/data/sessions.db)."""
+    nova_home = Path.home() / ".nova"
+    data_dir = nova_home / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    return str(data_dir / "sessions.db")
+
+
 def _db() -> sqlite3.Connection:
     global _conn
     if _conn is None:
-        path = _resolve_db_path()  # ~/.nova/data/tasks.db (shared file)
+        path = _resolve_sessions_db()
         _conn = sqlite3.connect(path, timeout=10, check_same_thread=False)
         _conn.execute("PRAGMA journal_mode=WAL")
-        _conn.execute("PRAGMA busy_timeout=8000")  # wait up to 8s for locks
+        _conn.execute("PRAGMA busy_timeout=5000")
         _conn.execute(
             """
             CREATE TABLE IF NOT EXISTS sessions (
@@ -45,8 +53,58 @@ def _db() -> sqlite3.Connection:
             "CREATE INDEX IF NOT EXISTS idx_sessions_sid ON sessions(session_id, id)"
         )
         _conn.commit()
+
+        # One-time migration: move sessions from tasks.db if they exist there
+        _migrate_from_tasks_db(path)
+
         logger.info("Session store ready: %s", path)
     return _conn
+
+
+def _migrate_from_tasks_db(new_path: str) -> None:
+    """Migrate session rows from the old shared tasks.db (if any) to sessions.db."""
+    try:
+        from app.tasks.store import _resolve_db_path
+        old_path = _resolve_db_path()
+        old_conn = sqlite3.connect(old_path, timeout=5)
+        # Check if sessions table exists in old DB
+        tables = old_conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'"
+        ).fetchall()
+        if not tables:
+            old_conn.close()
+            return
+
+        count = old_conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
+        if count == 0:
+            old_conn.close()
+            return
+
+        # Check if we already migrated (new DB has rows)
+        existing = _conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
+        if existing > 0:
+            old_conn.close()
+            return
+
+        # Copy rows
+        rows = old_conn.execute(
+            "SELECT session_id, role, content, ts FROM sessions ORDER BY id"
+        ).fetchall()
+        _conn.executemany(
+            "INSERT INTO sessions (session_id, role, content, ts) VALUES (?, ?, ?, ?)",
+            rows,
+        )
+        _conn.commit()
+
+        # Drop old table
+        old_conn.execute("DROP TABLE sessions")
+        old_conn.execute("DROP INDEX IF EXISTS idx_sessions_sid")
+        old_conn.commit()
+        old_conn.close()
+
+        logger.info("Migrated %d session rows from tasks.db to sessions.db", len(rows))
+    except Exception:
+        logger.debug("Session migration skipped (no old data or already done)", exc_info=True)
 
 
 def load_recent(session_id: str, limit: int) -> list[tuple[str, str]]:
