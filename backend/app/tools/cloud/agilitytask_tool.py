@@ -72,6 +72,20 @@ def _api(method: str, path: str, data: dict | None = None) -> dict | list | str:
         return {"error": True, "message": str(e)}
 
 
+def _find_project(projects: list, name: str) -> dict | None:
+    """Find a project by name. Prefers exact match, then substring match."""
+    name_lower = name.lower().strip()
+    # Exact match first
+    for p in projects:
+        if p["name"].lower() == name_lower:
+            return p
+    # Substring match
+    for p in projects:
+        if name_lower in p["name"].lower():
+            return p
+    return None
+
+
 def _fmt_tasks(tasks: list, limit: int = 10) -> str:
     lines = []
     for t in tasks[:limit]:
@@ -120,11 +134,7 @@ def get_project_tasks(project_name: str, status: str = "") -> str:
         # Find project by name
         result = _api("GET", "projects?limit=50")
         projects = result.get("data", []) if isinstance(result, dict) else []
-        match = None
-        for p in projects:
-            if project_name.lower() in p["name"].lower():
-                match = p
-                break
+        match = _find_project(projects, project_name)
 
         if not match:
             names = ", ".join(p["name"] for p in projects[:10])
@@ -157,20 +167,46 @@ def get_project_metrics(project_name: str) -> str:
     try:
         result = _api("GET", "projects?limit=50")
         projects = result.get("data", []) if isinstance(result, dict) else []
-        match = None
-        for p in projects:
-            if project_name.lower() in p["name"].lower():
-                match = p
-                break
+        match = _find_project(projects, project_name)
 
         if not match:
-            return f"No encontré proyecto '{project_name}'."
+            names = ", ".join(p["name"] for p in projects[:10])
+            return f"No encontré proyecto '{project_name}'. Disponibles: {names}"
 
-        metrics = _api("GET", f"projects/{match['id']}/metrics")
-        if isinstance(metrics, dict) and metrics.get("error"):
-            return f"Error: {metrics.get('message', 'unknown')}"
+        # Fetch all tasks to compute metrics client-side
+        tasks_result = _api("GET", f"tasks?projectId={match['id']}&limit=200")
+        tasks = tasks_result.get("data", []) if isinstance(tasks_result, dict) else []
 
-        return f"**Métricas de {match['name']}:**\n```json\n{json.dumps(metrics, indent=2, ensure_ascii=False)[:1500]}\n```"
+        # Compute metrics
+        total = len(tasks)
+        by_status: dict[str, int] = {}
+        by_priority: dict[str, int] = {}
+        for t in tasks:
+            s = t.get("status", "UNKNOWN")
+            by_status[s] = by_status.get(s, 0) + 1
+            pr = t.get("priority", "NONE")
+            by_priority[pr] = by_priority.get(pr, 0) + 1
+
+        completed = by_status.get("COMPLETED", 0)
+        progress = round(completed / total * 100, 1) if total > 0 else 0
+
+        # Members count from project metadata
+        members = match.get("memberCount", 0)
+
+        lines = [
+            f"**Métricas de {match['name']}:**\n",
+            f"- **Total tareas:** {total}",
+            f"- **Progreso:** {progress}% ({completed}/{total} completadas)",
+            f"- **Miembros:** {members}",
+            f"\n**Por estado:**",
+        ]
+        for s, c in sorted(by_status.items()):
+            lines.append(f"  - {s}: {c}")
+        lines.append(f"\n**Por prioridad:**")
+        for pr, c in sorted(by_priority.items()):
+            lines.append(f"  - {pr}: {c}")
+
+        return "\n".join(lines)
     except Exception as e:
         logger.error(f"AgilityTask metrics error: {e}", exc_info=True)
         return f"Error: {e}"
@@ -182,14 +218,11 @@ def create_task(project_name: str, title: str, description: str = "", priority: 
     try:
         result = _api("GET", "projects?limit=50")
         projects = result.get("data", []) if isinstance(result, dict) else []
-        match = None
-        for p in projects:
-            if project_name.lower() in p["name"].lower():
-                match = p
-                break
+        match = _find_project(projects, project_name)
 
         if not match:
-            return f"No encontré proyecto '{project_name}'."
+            names = ", ".join(p["name"] for p in projects[:10])
+            return f"No encontré proyecto '{project_name}'. Disponibles: {names}"
 
         task_data = {
             "projectId": match["id"],
@@ -247,16 +280,13 @@ def get_team_members(project_name: str) -> str:
     try:
         result = _api("GET", "projects?limit=50")
         projects = result.get("data", []) if isinstance(result, dict) else []
-        match = None
-        for p in projects:
-            if project_name.lower() in p["name"].lower():
-                match = p
-                break
+        match = _find_project(projects, project_name)
 
         if not match:
-            return f"No encontré proyecto '{project_name}'."
+            names = ", ".join(p["name"] for p in projects[:10])
+            return f"No encontré proyecto '{project_name}'. Disponibles: {names}"
 
-        members = _api("GET", f"members?projectId={match['id']}")
+        members = _api("GET", f"projects/{match['id']}/members")
         if isinstance(members, dict) and members.get("error"):
             return f"Error: {members.get('message', 'unknown')}"
 
