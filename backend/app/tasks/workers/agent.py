@@ -148,7 +148,7 @@ async def _converse_with_agent(
             progress=progress, progress_text=f"Turno {turn + 1}: comunicándose con agente...",
         )
 
-        response = query_agent(agent, session_id, message)
+        response = query_agent(agent, session_id, message, client_id=f"task-{task_id[:8]}")
 
         if response.startswith("Error:"):
             return response

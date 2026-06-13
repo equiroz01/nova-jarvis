@@ -47,6 +47,28 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(preload_fillers())
     logger.info("Filler phrases caching in background...")
 
+    # Pre-warm Vertex AI engines (non-blocking)
+    async def _prewarm_vertex_engines():
+        try:
+            from app.vertex_agents.client import prewarm_engines
+            count = await asyncio.get_event_loop().run_in_executor(None, prewarm_engines)
+            logger.info(f"Vertex AI: {count} engines pre-warmed and cached")
+        except Exception as e:
+            logger.error(f"Engine pre-warm failed: {e}", exc_info=True)
+
+    async def _session_cleanup_loop():
+        from app.vertex_agents.client import cleanup_expired_sessions
+        while True:
+            await asyncio.sleep(300)
+            try:
+                cleanup_expired_sessions()
+            except Exception as e:
+                logger.warning(f"Session cleanup error: {e}")
+
+    asyncio.create_task(_prewarm_vertex_engines())
+    asyncio.create_task(_session_cleanup_loop())
+    logger.info("Vertex AI pre-warming started in background...")
+
     # Background task system
     from app.tasks import store as task_store
     from app.tasks.runner import TaskRunner
@@ -71,7 +93,7 @@ app = FastAPI(title="NOVA Backend", version=settings.nova_version, lifespan=life
 # Trust logic lives in app.security (single source of truth, shared with /health).
 # Reachable without the API key. /alexa is public at the edge (Amazon controls the
 # request and cannot send our Bearer token) but is gated by skill-ID inside the route.
-_PUBLIC_PATHS = {"/health", "/alexa"}
+_PUBLIC_PATHS = {"/health", "/alexa", "/sw.js"}
 
 
 @app.middleware("http")
@@ -155,6 +177,12 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 @app.get("/")
 async def serve_ui():
     return FileResponse(STATIC_DIR / "index.html")
+
+
+@app.get("/sw.js")
+async def serve_sw():
+    # Served from root (not /static) so the service worker scope covers "/"
+    return FileResponse(STATIC_DIR / "sw.js", media_type="application/javascript")
 
 
 @app.get("/settings")

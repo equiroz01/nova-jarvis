@@ -1,45 +1,80 @@
-"""Vertex AI Agent client — supports both Dialogflow CX and Reasoning Engine agents."""
+"""Vertex AI Agent client — supports both Dialogflow CX and Reasoning Engine agents.
 
+Features:
+- Engine object cache with TTL (avoids re-fetching from GCP control plane)
+- Session pool per (client_id, agent_id) with auto-expiry
+- HTTP connection pooling for REST fallback
+- Pre-warming at startup
+"""
+
+import json
 import logging
 import os
+import time
 from pathlib import Path
+from threading import Lock
 
 import requests as http_requests
 
 logger = logging.getLogger(__name__)
 
+# ── Credentials ──
+
 _credentials = None
-_re_initialized = False
+_credentials_lock = Lock()
 
 
 def _get_credentials():
     """Get Google Cloud credentials from service account or ADC."""
     global _credentials
-    if _credentials and _credentials.valid:
+    with _credentials_lock:
+        if _credentials and _credentials.valid:
+            return _credentials
+
+        from google.oauth2 import service_account
+        from google.auth.transport.requests import Request
+
+        sa_path = os.environ.get(
+            "GOOGLE_APPLICATION_CREDENTIALS",
+            str(Path(__file__).parent.parent.parent.parent / "secrets" / "gcp-service-account.json"),
+        )
+
+        if Path(sa_path).exists():
+            _credentials = service_account.Credentials.from_service_account_file(
+                sa_path,
+                scopes=["https://www.googleapis.com/auth/cloud-platform"],
+            )
+        else:
+            from google.auth import default
+            _credentials, _ = default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+
+        _credentials.refresh(Request())
         return _credentials
 
-    from google.oauth2 import service_account
-    from google.auth.transport.requests import Request
 
-    sa_path = os.environ.get(
-        "GOOGLE_APPLICATION_CREDENTIALS",
-        str(Path(__file__).parent.parent.parent.parent / "secrets" / "gcp-service-account.json"),
-    )
+# ── HTTP Connection Pool ──
 
-    if Path(sa_path).exists():
-        _credentials = service_account.Credentials.from_service_account_file(
-            sa_path,
-            scopes=["https://www.googleapis.com/auth/cloud-platform"],
+_http_session: http_requests.Session | None = None
+
+
+def _get_http_session() -> http_requests.Session:
+    """Get a pooled HTTP session for REST API calls."""
+    global _http_session
+    if _http_session is None:
+        _http_session = http_requests.Session()
+        adapter = http_requests.adapters.HTTPAdapter(
+            pool_connections=2,
+            pool_maxsize=10,
+            max_retries=1,
         )
-    else:
-        from google.auth import default
-        _credentials, _ = default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
-
-    _credentials.refresh(Request())
-    return _credentials
+        _http_session.mount("https://", adapter)
+    return _http_session
 
 
-# ── Reasoning Engine (Vertex AI Agent Engine) ──
+# ── Vertex AI SDK Init ──
+
+_re_initialized = False
+
 
 def _init_vertex():
     """Initialize Vertex AI SDK once."""
@@ -51,83 +86,220 @@ def _init_vertex():
     _re_initialized = True
 
 
-def _get_reasoning_engine(agent_id: str):
-    """Get a Reasoning Engine agent by ID."""
-    _init_vertex()
-    from vertexai import agent_engines
-    return agent_engines.get(agent_id)
+# ── Engine Object Cache ──
 
+_engine_cache: dict[str, tuple[object, float]] = {}  # agent_id -> (engine, fetched_at)
+_engine_cache_lock = Lock()
+ENGINE_CACHE_TTL = 3600  # 1 hour
+
+
+def _get_reasoning_engine(agent_id: str, force_refresh: bool = False):
+    """Get a cached Reasoning Engine object. Fetches from GCP only on miss or TTL expiry."""
+    _init_vertex()
+
+    now = time.time()
+    if not force_refresh:
+        with _engine_cache_lock:
+            if agent_id in _engine_cache:
+                engine, fetched_at = _engine_cache[agent_id]
+                if now - fetched_at < ENGINE_CACHE_TTL:
+                    return engine
+
+    from vertexai import agent_engines
+    engine = agent_engines.get(agent_id)
+
+    with _engine_cache_lock:
+        _engine_cache[agent_id] = (engine, now)
+
+    logger.info(f"RE engine cached: {agent_id}")
+    return engine
+
+
+def invalidate_engine_cache(agent_id: str = None):
+    """Invalidate one or all cached engines. Call after agent redeployment."""
+    with _engine_cache_lock:
+        if agent_id:
+            _engine_cache.pop(agent_id, None)
+        else:
+            _engine_cache.clear()
+    logger.info(f"Engine cache invalidated: {'all' if not agent_id else agent_id}")
+
+
+def prewarm_engines() -> int:
+    """Pre-warm all enabled RE engines at startup. Returns count of cached engines."""
+    from app.vertex_agents.registry import get_enabled_agents
+    agents = get_enabled_agents()
+    re_agents = [a for a in agents if a.get("type", "reasoning_engine") == "reasoning_engine"]
+
+    count = 0
+    for agent in re_agents:
+        try:
+            _get_reasoning_engine(agent["agent_id"])
+            count += 1
+        except Exception as e:
+            logger.warning(f"Pre-warm failed for {agent['name']}: {e}")
+
+    return count
+
+
+def get_cache_stats() -> dict:
+    """Get engine cache and session pool stats for health endpoint."""
+    with _engine_cache_lock:
+        engine_count = len(_engine_cache)
+    with _session_pool_lock:
+        session_count = len(_session_pool)
+    return {
+        "engines_cached": engine_count,
+        "sessions_pooled": session_count,
+        "engine_cache_ttl": ENGINE_CACHE_TTL,
+    }
+
+
+# ── Session Pool ──
+
+# (client_id, agent_id) -> {"session_id": str, "created_at": float, "last_used": float}
+_session_pool: dict[tuple[str, str], dict] = {}
+_session_pool_lock = Lock()
+SESSION_MAX_AGE = 1800   # 30 min
+SESSION_MAX_IDLE = 600   # 10 min idle
+
+
+def _get_or_create_session(
+    engine, agent_id: str, client_id: str, user_id: str,
+) -> str:
+    """Get an existing RE session for this client+agent, or create a new one."""
+    key = (client_id, agent_id)
+    now = time.time()
+
+    with _session_pool_lock:
+        entry = _session_pool.get(key)
+        if entry:
+            age = now - entry["created_at"]
+            idle = now - entry["last_used"]
+            if age < SESSION_MAX_AGE and idle < SESSION_MAX_IDLE:
+                entry["last_used"] = now
+                logger.debug(f"RE session reused: client={client_id} agent={agent_id}")
+                return entry["session_id"]
+
+    # Create new session (outside lock — network call)
+    session = engine.create_session(user_id=user_id)
+    session_id = session["id"] if isinstance(session, dict) else session.id
+
+    with _session_pool_lock:
+        _session_pool[key] = {
+            "session_id": session_id,
+            "created_at": now,
+            "last_used": now,
+        }
+
+    logger.info(f"RE session created: client={client_id} agent={agent_id} session={session_id}")
+    return session_id
+
+
+def _evict_session(client_id: str, agent_id: str):
+    """Remove a session from the pool (e.g., on server-side expiry error)."""
+    key = (client_id, agent_id)
+    with _session_pool_lock:
+        _session_pool.pop(key, None)
+
+
+def cleanup_expired_sessions():
+    """Periodic cleanup of expired session pool entries."""
+    now = time.time()
+    expired_keys = []
+    with _session_pool_lock:
+        for key, entry in _session_pool.items():
+            if now - entry["created_at"] > SESSION_MAX_AGE or now - entry["last_used"] > SESSION_MAX_IDLE:
+                expired_keys.append(key)
+        for key in expired_keys:
+            del _session_pool[key]
+    if expired_keys:
+        logger.info(f"Cleaned up {len(expired_keys)} expired RE sessions")
+
+
+# ── Reasoning Engine Query ──
 
 def reasoning_engine_query(
     agent_config: dict,
     session_id: str,
     message: str,
     user_id: str = "nova-user",
+    client_id: str = "default",
 ) -> str:
     """Send a message to a Reasoning Engine agent.
 
-    Tries SDK first, falls back to REST API if SDK fails.
-
-    Args:
-        agent_config: Dict with agent_id, project_id, location
-        session_id: Session ID (if empty, creates a new session)
-        message: User message
-        user_id: User identifier for session creation
-
-    Returns:
-        Agent response text, or error string
+    Tries SDK first (with session pool), falls back to REST API.
     """
     agent_id = agent_config["agent_id"]
 
     # Try SDK first
     try:
-        return _re_query_sdk(agent_config, session_id, message, user_id)
+        result = _re_query_sdk(agent_config, session_id, message, user_id, client_id)
+        logger.debug(f"RE served by SDK for agent {agent_id}")
+        return result
     except Exception as sdk_err:
         logger.warning(f"RE SDK failed for agent {agent_id}, trying REST: {sdk_err}")
 
-    # Fallback to REST
+    # Fallback to REST. Logged at INFO so a silently always-failing SDK (every
+    # response served by REST) is visible instead of looking healthy.
     try:
-        return _re_query_rest(agent_config, session_id, message, user_id)
+        result = _re_query_rest(agent_config, session_id, message, user_id, client_id)
+        logger.info(f"RE served by REST fallback for agent {agent_id} (SDK failed)")
+        return result
     except Exception as rest_err:
         logger.error(f"RE REST also failed for agent {agent_id}: {rest_err}", exc_info=True)
         return _re_format_error(agent_config, rest_err)
 
 
 def _re_query_sdk(
-    agent_config: dict, session_id: str, message: str, user_id: str,
+    agent_config: dict, session_id: str, message: str,
+    user_id: str, client_id: str,
 ) -> str:
-    """Query via Vertex AI Python SDK."""
+    """Query via Vertex AI Python SDK with engine cache + session pool."""
     agent_id = agent_config["agent_id"]
     engine = _get_reasoning_engine(agent_id)
 
-    # Create session if needed
-    if not session_id or session_id.startswith("nova-"):
-        session = engine.create_session(user_id=user_id)
-        session_id = session["id"] if isinstance(session, dict) else session.id
-        logger.info(f"RE SDK agent {agent_id}: created session {session_id}")
+    # Use session pool
+    re_session_id = _get_or_create_session(engine, agent_id, client_id, user_id)
 
-    # Collect streaming events
-    response_texts = []
-    for event in engine.stream_query(
-        session_id=session_id,
-        message=message,
-    ):
-        text = _extract_re_event_text(event)
-        if text:
-            response_texts.append(text)
+    try:
+        response_texts = []
+        for event in engine.stream_query(
+            session_id=re_session_id,
+            message=message,
+        ):
+            text = _extract_re_event_text(event)
+            if text:
+                response_texts.append(text)
 
-    if response_texts:
-        return "\n".join(response_texts)
+        if response_texts:
+            return "\n".join(response_texts)
 
-    return "Agent responded but no text was returned."
+        return "Agent responded but no text was returned."
+
+    except Exception as e:
+        # Session may have expired server-side — evict and retry once
+        error_str = str(e).lower()
+        if "session" in error_str and ("not found" in error_str or "expired" in error_str or "invalid" in error_str):
+            logger.warning(f"RE session expired for client={client_id} agent={agent_id}, retrying...")
+            _evict_session(client_id, agent_id)
+            re_session_id = _get_or_create_session(engine, agent_id, client_id, user_id)
+
+            response_texts = []
+            for event in engine.stream_query(session_id=re_session_id, message=message):
+                text = _extract_re_event_text(event)
+                if text:
+                    response_texts.append(text)
+            return "\n".join(response_texts) if response_texts else "Agent responded but no text was returned."
+
+        raise
 
 
 def _re_query_rest(
-    agent_config: dict, session_id: str, message: str, user_id: str,
+    agent_config: dict, session_id: str, message: str,
+    user_id: str, client_id: str,
 ) -> str:
-    """Query via REST API (fallback)."""
-    import json
-
+    """Query via REST API (fallback) with HTTP connection pooling."""
     agent_id = agent_config["agent_id"]
     project_id = agent_config.get("project_id", "hypernovalabs-sa")
     location = agent_config.get("location", "us-central1")
@@ -146,25 +318,47 @@ def _re_query_rest(
         "Content-Type": "application/json",
     }
 
+    http = _get_http_session()
+
+    # Check session pool first
+    key = (client_id, agent_id)
+    now = time.time()
+    re_session_id = None
+
+    with _session_pool_lock:
+        entry = _session_pool.get(key)
+        if entry:
+            age = now - entry["created_at"]
+            idle = now - entry["last_used"]
+            if age < SESSION_MAX_AGE and idle < SESSION_MAX_IDLE:
+                re_session_id = entry["session_id"]
+                entry["last_used"] = now
+
     # Create session if needed
-    if not session_id or session_id.startswith("nova-"):
-        resp = http_requests.post(
+    if not re_session_id:
+        resp = http.post(
             f"{base_url}:query",
             json={"class_method": "create_session", "input": {"user_id": user_id}},
             headers=headers, timeout=30,
         )
         resp.raise_for_status()
-        session_id = resp.json()["output"]["id"]
-        logger.info(f"RE REST agent {agent_id}: created session {session_id}")
+        re_session_id = resp.json()["output"]["id"]
+        with _session_pool_lock:
+            _session_pool[key] = {
+                "session_id": re_session_id,
+                "created_at": now,
+                "last_used": now,
+            }
+        logger.info(f"RE REST session created: client={client_id} agent={agent_id}")
 
     # Stream query
-    resp = http_requests.post(
+    resp = http.post(
         f"{base_url}:streamQuery",
         json={
             "class_method": "stream_query",
             "input": {
                 "user_id": user_id,
-                "session_id": session_id,
+                "session_id": re_session_id,
                 "message": message,
             },
         },
@@ -172,24 +366,23 @@ def _re_query_rest(
     )
     resp.raise_for_status()
 
-    # Parse response — can be JSON or SSE chunks
+    # Parse response
     raw = resp.text.strip()
     if not raw:
         return "Agent responded but no text was returned."
 
-    # Try JSON parse
     try:
         data = json.loads(raw)
         return _extract_re_rest_text(data)
     except json.JSONDecodeError:
         pass
 
-    # Try SSE format (multiple JSON objects separated by newlines)
+    # SSE format fallback
     texts = []
     for line in raw.split("\n"):
         line = line.strip()
-        if not line or line.startswith("data:"):
-            line = line[5:].strip() if line.startswith("data:") else line
+        if line.startswith("data:"):
+            line = line[5:].strip()
         if not line:
             continue
         try:
@@ -203,9 +396,10 @@ def _re_query_rest(
     return "\n".join(texts) if texts else "Agent responded but could not parse response."
 
 
+# ── REST Response Parsing ──
+
 def _extract_re_rest_text(data: dict) -> str:
     """Extract text from a REST API Reasoning Engine response."""
-    # Direct content.parts format
     content = data.get("content", {})
     if isinstance(content, dict):
         parts = content.get("parts", [])
@@ -213,12 +407,10 @@ def _extract_re_rest_text(data: dict) -> str:
         if texts:
             return " ".join(texts)
 
-    # Output field
     output = data.get("output", "")
     if isinstance(output, str) and output:
         return output
 
-    # Nested in output list (multi-event)
     if isinstance(output, list):
         texts = []
         for item in output:
@@ -237,8 +429,7 @@ def _extract_re_rest_text(data: dict) -> str:
 def _re_format_error(agent_config: dict, err: Exception) -> str:
     """Format a Reasoning Engine error into a user-friendly message."""
     error_str = str(err)
-    agent_id = agent_config["agent_id"]
-    name = agent_config.get("name", agent_id)
+    name = agent_config.get("name", agent_config["agent_id"])
 
     if "404" in error_str or "not found" in error_str.lower():
         return f"Error: Reasoning Engine agent '{name}' not found. Verify agent_id."
@@ -251,13 +442,14 @@ def _re_format_error(agent_config: dict, err: Exception) -> str:
     return f"Error communicating with Reasoning Engine agent: {err}"
 
 
+# ── SDK Event Parsing ──
+
 def _extract_re_event_text(event) -> str:
     """Extract text from a Reasoning Engine stream event."""
     if isinstance(event, str):
         return event
 
     if isinstance(event, dict):
-        # Common patterns in RE events
         if "content" in event:
             content = event["content"]
             if isinstance(content, str):
@@ -273,14 +465,12 @@ def _extract_re_event_text(event) -> str:
                 return msg
             if isinstance(msg, dict):
                 return msg.get("text", "")
-        # ADK-style events
         if "actions" in event:
-            return ""  # Tool call events, skip
+            return ""
         if "author" in event and event.get("author") == "agent":
             parts = event.get("content", {}).get("parts", [])
             return " ".join(p.get("text", "") for p in parts if isinstance(p, dict) and "text" in p)
 
-    # Object with attributes
     for attr in ("text", "content", "message"):
         val = getattr(event, attr, None)
         if val and isinstance(val, str):
@@ -288,6 +478,8 @@ def _extract_re_event_text(event) -> str:
 
     return ""
 
+
+# ── Session Helpers (public API) ──
 
 def reasoning_engine_create_session(
     agent_config: dict,
@@ -362,13 +554,14 @@ def detect_intent(
             }
         }
 
-        response = http_requests.post(url, json=body, headers=headers, timeout=30)
+        http = _get_http_session()
+        response = http.post(url, json=body, headers=headers, timeout=30)
 
         if response.status_code == 401:
             from google.auth.transport.requests import Request
             creds.refresh(Request())
             headers["Authorization"] = f"Bearer {creds.token}"
-            response = http_requests.post(url, json=body, headers=headers, timeout=30)
+            response = http.post(url, json=body, headers=headers, timeout=30)
 
         if response.status_code == 404:
             return f"Error: Agent '{agent_config.get('name', agent_id)}' not found. Verify agent_id and location."
@@ -413,7 +606,7 @@ def _extract_response_text(result: dict) -> str:
     return "Agent responded but no text was returned."
 
 
-# ── Unified interface ──
+# ── Unified Interface ──
 
 def query_agent(
     agent_config: dict,
@@ -421,6 +614,7 @@ def query_agent(
     message: str,
     language: str = "es",
     user_id: str = "nova-user",
+    client_id: str = "default",
 ) -> str:
     """Unified query: routes to the correct backend based on agent type.
 
@@ -433,7 +627,7 @@ def query_agent(
     if agent_type == "dialogflow_cx":
         return detect_intent(agent_config, session_id, message, language)
     else:
-        return reasoning_engine_query(agent_config, session_id, message, user_id)
+        return reasoning_engine_query(agent_config, session_id, message, user_id, client_id)
 
 
 def test_agent(agent_config: dict) -> dict:
@@ -444,6 +638,7 @@ def test_agent(agent_config: dict) -> dict:
             session_id="nova-test",
             message="Hello, are you there? Respond briefly.",
             language="en",
+            client_id="nova-test",
         )
         is_error = response.startswith("Error:")
         return {
@@ -454,11 +649,10 @@ def test_agent(agent_config: dict) -> dict:
         return {"ok": False, "message": str(e)}
 
 
-def discover_agent(agent_config: dict) -> dict:
-    """Interview an agent to discover its capabilities.
+# ── Discovery ──
 
-    Returns: {description, specialties, routing_prompt, raw_responses}
-    """
+def discover_agent(agent_config: dict) -> dict:
+    """Interview an agent to discover its capabilities."""
     agent_type = agent_config.get("type", "reasoning_engine")
 
     if agent_type == "reasoning_engine":
@@ -472,7 +666,6 @@ def _discover_reasoning_engine(agent_config: dict) -> dict:
     discovery = {"raw_responses": []}
     user_id = "nova-discovery"
 
-    # Create a dedicated session for discovery
     session_id = reasoning_engine_create_session(agent_config, user_id=user_id)
     if not session_id:
         discovery["raw_responses"].append("Error: Could not create discovery session")
@@ -485,7 +678,7 @@ def _discover_reasoning_engine(agent_config: dict) -> dict:
     ]
 
     for q in questions:
-        r = reasoning_engine_query(agent_config, session_id, q, user_id=user_id)
+        r = reasoning_engine_query(agent_config, session_id, q, user_id=user_id, client_id="nova-discovery")
         discovery["raw_responses"].append(r)
 
     return _synthesize_discovery(agent_config, discovery)
