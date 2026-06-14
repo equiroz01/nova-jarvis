@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+<style>
+  *{box-sizing:border-box} html,body{margin:0;height:100%;background:#04060a;overflow:hidden}
+  #nova{width:100vw;height:100vh}
+</style>
+</head>
+<body>
+<div id="nova"></div>
+<script type="module">
+// Servido desde el backend: /static/face/mobile/webview-host.html
+// (los imports relativos resuelven contra /static/face/)
+import { NovaFace } from '../src/nova-face.js';
+
+const params = new URLSearchParams(location.search);
+const assetBase = params.get('assets') || '../assets/';
+
+const face = new NovaFace({
+  container: '#nova',
+  assetBase,
+  emotion: params.get('emotion') || 'neutral',
+  hud: params.get('hud') !== '0',
+});
+
+// Synthetic lip-sync envelope. On mobile the audio plays natively (expo-audio),
+// which exposes no playback metering, so the host animates the mouth/eyes itself
+// while speaking/listening. A real setLevel() command (if the app ever pushes
+// one) takes over for ~250ms and suppresses the synthetic drive.
+let lastRealLevel = -1e9, synthPhase = 0;
+function synthLoop(now){
+  const mode = face.getMode();
+  const realRecently = (now - lastRealLevel) < 250;
+  if (!realRecently){
+    if (mode === 'speaking'){
+      synthPhase += 0.45;
+      const v = 0.18 + 0.12*Math.sin(synthPhase) + 0.08*Math.sin(synthPhase*2.3);
+      face.setLevel(Math.max(0.05, Math.min(1, v)));
+    } else if (mode === 'listening'){
+      synthPhase += 0.20;
+      const v = 0.08 + 0.06*Math.sin(synthPhase) + 0.03*Math.sin(synthPhase*1.7);
+      face.setLevel(Math.max(0.02, Math.min(1, v)));
+    }
+  }
+  requestAnimationFrame(synthLoop);
+}
+requestAnimationFrame(synthLoop);
+
+// puente RN -> WebView
+function handle(raw){
+  let msg; try{ msg = typeof raw==='string' ? JSON.parse(raw) : raw; }catch(e){ return; }
+  if (!msg || msg.type!=='nova') return;
+  switch(msg.cmd){
+    case 'setMode':    face.setMode(msg.value); break;
+    case 'setEmotion': face.setEmotion(msg.value); break;
+    case 'setLevel':   lastRealLevel = performance.now(); face.setLevel(msg.value); break;
+    case 'think':      face.think(!!msg.value); break;
+    case 'speak':      face.speak(); break;
+    case 'listen':     face.listen(); break;
+    case 'idle':       face.idle(); break;
+    case 'status':     face.setStatus(msg.value); break;
+  }
+}
+// iOS y Android entregan los mensajes por canales distintos
+window.addEventListener('message', e=>handle(e.data));
+document.addEventListener('message', e=>handle(e.data)); // Android
+
+// puente WebView -> RN
+function post(event, value){
+  const payload = JSON.stringify({ type:'nova', event, value });
+  if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(payload);
+}
+face.on('ready', ()=>post('ready'));
+face.on('modechange', v=>post('modechange', v));
+face.on('emotionchange', v=>post('emotionchange', v));
+face.on('status', v=>post('status', v));
+</script>
+</body>
+</html>

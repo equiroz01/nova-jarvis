@@ -12,6 +12,7 @@ import * as voice from './voice.js';
 import * as chat from './chat.js';
 import * as handsfree from './handsfree.js';
 import * as tasks from './tasks.js';
+import * as face from './face.js';
 
 const API = window.location.origin;
 const sessionId = 'web-' + crypto.randomUUID().slice(0, 8);
@@ -27,6 +28,7 @@ health.init(config);         // clock + health check
 markdown.init();             // pure utility
 messages.init();             // message display
 audio.init();                // audio playback (event bus)
+face.init();                 // NOVA Face visualizer (reactor/face toggle)
 tts.init();                  // browser speech synthesis
 waveform.init();             // arc reactor + waveform bars
 fillers.init(config);        // filler phrases + greeting pre-cache

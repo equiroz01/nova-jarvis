@@ -16,6 +16,8 @@ import { theme } from '../theme';
 import { Settings, getSessionId, resetSession } from '../settings';
 import { AudioQueue } from '../audioQueue';
 import { streamChat, streamVoice, ChatEvent, VoiceEvent, StreamHandle } from '../api';
+import NovaFaceView, { NovaFaceHandle, NovaMode } from '../components/NovaFaceView';
+import ArcReactor from '../components/ArcReactor';
 
 type Msg = {
   id: string;
@@ -39,16 +41,23 @@ export default function ChatScreen({
   const [busy, setBusy] = useState(false);
   const [recording, setRecording] = useState(false);
   const [status, setStatus] = useState<string>('');
+  // Single source of truth for the visualizer state (reactor + face both read it).
+  const [visualMode, setVisualMode] = useState<NovaMode>('idle');
 
   const sessionRef = useRef<string>('');
   const audioRef = useRef<AudioQueue | null>(null);
   const streamRef = useRef<StreamHandle | null>(null);
   const listRef = useRef<FlatList<Msg>>(null);
+  const faceRef = useRef<NovaFaceHandle>(null);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+
+  const faceBaseUrl = `${settings.backendUrl}/static/face`;
 
   useEffect(() => {
     const q = new AudioQueue();
     audioRef.current = q;
+    // Drive the visualizer's speaking state from real TTS playback.
+    q.onActive = (active) => setVisualMode(active ? 'speaking' : 'idle');
     q.init().catch(() => {});
     getSessionId().then((id) => (sessionRef.current = id));
     return () => {
@@ -56,6 +65,18 @@ export default function ChatScreen({
       streamRef.current?.abort();
     };
   }, []);
+
+  // Push visualMode to the face WebView (imperative bridge). The reactor reads
+  // visualMode directly as a prop, so it needs no equivalent.
+  useEffect(() => {
+    if (!settings.faceEnabled) return;
+    const f = faceRef.current;
+    if (!f) return;
+    if (visualMode === 'speaking') f.speak();
+    else if (visualMode === 'listening') f.listen();
+    else if (visualMode === 'thinking') f.think(true);
+    else f.idle();
+  }, [visualMode, settings.faceEnabled]);
 
   const scrollToEnd = useCallback(() => {
     requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
@@ -82,6 +103,7 @@ export default function ChatScreen({
     appendMsg({ id: novaId, role: 'nova', text: '', pending: true });
     setBusy(true);
     setStatus('NOVA está pensando…');
+    setVisualMode('thinking');
 
     let acc = '';
     streamRef.current = streamChat(
@@ -106,11 +128,14 @@ export default function ChatScreen({
           updateMsg(novaId, { text: `⚠️ ${err.message}`, pending: false });
           setBusy(false);
           setStatus('');
+          setVisualMode('idle');
         },
         onDone: () => {
           setBusy(false);
           setStatus('');
           scrollToEnd();
+          // No TTS on the text path → return to idle (speak() takes over if audio plays).
+          setVisualMode('idle');
         },
       },
     );
@@ -130,6 +155,7 @@ export default function ChatScreen({
       recorder.record();
       setRecording(true);
       setStatus('Escuchando…');
+      setVisualMode('listening');
     } catch (e: any) {
       setStatus(`No se pudo grabar: ${e?.message ?? e}`);
     }
@@ -140,6 +166,7 @@ export default function ChatScreen({
     setRecording(false);
     setBusy(true);
     setStatus('Transcribiendo…');
+    setVisualMode('thinking');
     try {
       await recorder.stop();
     } catch {}
@@ -181,10 +208,14 @@ export default function ChatScreen({
           updateMsg(novaId, { text: `⚠️ ${err.message}`, pending: false });
           setBusy(false);
           setStatus('');
+          setVisualMode('idle');
         },
         onDone: () => {
           setBusy(false);
           setStatus('');
+          // If TTS is playing, AudioQueue.onActive returns the face to idle when
+          // it finishes; otherwise drop the thinking state now.
+          if (!audioRef.current?.isPlaying()) setVisualMode('idle');
         },
       },
     );
@@ -196,6 +227,7 @@ export default function ChatScreen({
     setMessages([]);
     setBusy(false);
     setStatus('');
+    setVisualMode('idle');
     sessionRef.current = await resetSession();
   }, []);
 
@@ -233,6 +265,28 @@ export default function ChatScreen({
             <Text style={styles.iconTxt}>⚙︎</Text>
           </Pressable>
         </View>
+      </View>
+
+      <View style={styles.facePanel}>
+        {settings.faceEnabled ? (
+          <NovaFaceView
+            ref={faceRef}
+            baseUrl={faceBaseUrl}
+            emotion="neutral"
+            style={styles.faceWeb}
+            onReady={() => {
+              // Re-apply the current state once the WebView is live.
+              const f = faceRef.current;
+              if (!f) return;
+              if (visualMode === 'speaking') f.speak();
+              else if (visualMode === 'listening') f.listen();
+              else if (visualMode === 'thinking') f.think(true);
+              else f.idle();
+            }}
+          />
+        ) : (
+          <ArcReactor mode={visualMode} size={200} />
+        )}
       </View>
 
       <FlatList
@@ -310,6 +364,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   iconTxt: { color: theme.text, fontSize: 18 },
+  facePanel: {
+    height: 240,
+    backgroundColor: theme.bg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.border,
+  },
+  faceWeb: { flex: 1, backgroundColor: 'transparent' },
   listContent: { padding: 16, flexGrow: 1 },
   row: { marginVertical: 4, flexDirection: 'row' },
   rowUser: { justifyContent: 'flex-end' },

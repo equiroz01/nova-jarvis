@@ -40,6 +40,12 @@
           <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
         </svg>
       </button>
+      <button class="theme-toggle" id="faceToggle" title="Toggle NOVA Face / Reactor">
+        <svg id="faceIcon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9"/><circle cx="9" cy="10" r="0.6" fill="currentColor"/><circle cx="15" cy="10" r="0.6" fill="currentColor"/>
+          <path d="M8.5 14.5a4 4 0 0 0 7 0"/>
+        </svg>
+      </button>
       <button class="theme-toggle" id="themeToggle" title="Toggle theme">
         <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
@@ -63,6 +69,10 @@
     </div>
   </header>
 
+  <!-- NOVA Face (hero) — visible in TEXT/VOICE when the Face visualizer is on.
+       Empty by default; the face canvas is injected/relocated here by face.js. -->
+  <div id="novaFace"></div>
+
   <!-- Chat -->
   <div class="chat-container" id="chatContainer">
     <div class="welcome" id="welcome">
@@ -84,6 +94,8 @@
       </svg>
     </button>
     <div class="arc-reactor" id="hfReactor"></div>
+    <!-- Face slot: when the Face visualizer is on, face.js relocates the canvas here. -->
+    <div id="hfFaceSlot"></div>
     <div class="hf-hud-status" id="hfHudStatus">LISTENING</div>
     <div class="hf-hud-transcript" id="hfHudTranscript"></div>
     <div class="hf-hud-response" id="hfHudResponse"></div>

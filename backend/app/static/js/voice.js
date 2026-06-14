@@ -4,6 +4,7 @@ import { addMessage, hideWelcome, hideTyping } from './messages.js';
 import { playAudio, stopAudio } from './audio.js';
 import { speakFiller, startFillerLoop, stopFillerLoop, setFillerLoopType } from './fillers.js';
 import { startLiveWaveform, stopLiveWaveform } from './waveform.js';
+import bus from './eventbus.js';
 
 let API;
 let sessionId;
@@ -93,6 +94,7 @@ async function startRecording() {
 
     isRecording = true;
     updateMicState('recording');
+    bus.emit('nova:listening', { on: true });
     startLiveWaveform(analyserNode);
   } catch (e) {
     console.error('Mic error:', e);
@@ -103,6 +105,8 @@ async function startRecording() {
 export function stopRecording() {
   isRecording = false;
   updateMicState('processing');
+  bus.emit('nova:listening', { on: false });
+  bus.emit('nova:thinking', { on: true });
   stopLiveWaveform();
 
   if (scriptProcessor) { scriptProcessor.disconnect(); scriptProcessor = null; }
@@ -166,6 +170,7 @@ async function sendVoice(blob) {
 
     stopFillerLoop();
     stopAudio('filler');
+    bus.emit('nova:thinking', { on: false });
     if (finalData) {
       if (finalData.response) addMessage(finalData.response, 'jarvis');
       if (finalData.audio_base64) playAudio(finalData.audio_base64, 'response');
@@ -174,6 +179,7 @@ async function sendVoice(blob) {
   } catch (e) {
     stopFillerLoop();
     stopAudio('filler');
+    bus.emit('nova:thinking', { on: false });
     hideTyping();
     addMessage('Voice processing failed. Check backend.', 'jarvis');
     updateMicState('idle');
