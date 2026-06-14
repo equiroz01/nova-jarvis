@@ -83,8 +83,8 @@ export default function SettingsScreen({
           <View style={styles.switchText}>
             <Text style={styles.label}>NOVA Face</Text>
             <Text style={styles.hint}>
-              Muestra el avatar animado en lugar del encabezado. Reacciona al hablar,
-              escuchar y pensar.
+              Activado: avatar animado. Desactivado: reactor de NOVA. Ambos reaccionan
+              al hablar, escuchar y pensar.
             </Text>
           </View>
           <Switch
