@@ -150,7 +150,7 @@ export function streamVoice(
   form.append('audio', {
     uri: audioUri,
     name: 'speech.m4a',
-    type: 'audio/m4a',
+    type: 'audio/mp4',
   } as any);
   form.append('session_id', fields.session_id);
   form.append('language', fields.language);
@@ -163,6 +163,24 @@ export function streamVoice(
     onError: handlers.onError,
     onDone: handlers.onDone,
   });
+}
+
+export async function fetchTts(
+  settings: Conn,
+  text: string,
+): Promise<string | null> {
+  try {
+    const res = await fetch(`${settings.backendUrl}/tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders(settings) },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) return null;
+    const body = await res.json();
+    return body?.audio_base64 || null;
+  } catch {
+    return null;
+  }
 }
 
 export async function checkHealth(settings: Conn): Promise<{ ok: boolean; detail: string }> {
