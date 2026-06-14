@@ -30,7 +30,7 @@ sleep 1
 # Install dependencies if needed
 if ! python3.11 -c "import fastapi" 2>/dev/null; then
   echo "Installing dependencies..."
-  pip3 install -r "$BACKEND_DIR/requirements.txt" -q
+  python3.11 -m pip install -r "$BACKEND_DIR/requirements.txt" -q
 fi
 
 # Copy .env to backend dir
