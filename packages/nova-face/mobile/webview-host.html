@@ -25,6 +25,29 @@ const face = new NovaFace({
   hud: params.get('hud') !== '0',
 });
 
+// Synthetic lip-sync envelope. On mobile the audio plays natively (expo-audio),
+// which exposes no playback metering, so the host animates the mouth/eyes itself
+// while speaking/listening. A real setLevel() command (if the app ever pushes
+// one) takes over for ~250ms and suppresses the synthetic drive.
+let lastRealLevel = -1e9, synthPhase = 0;
+function synthLoop(now){
+  const mode = face.getMode();
+  const realRecently = (now - lastRealLevel) < 250;
+  if (!realRecently){
+    if (mode === 'speaking'){
+      synthPhase += 0.45;
+      const v = 0.18 + 0.12*Math.sin(synthPhase) + 0.08*Math.sin(synthPhase*2.3);
+      face.setLevel(Math.max(0.05, Math.min(1, v)));
+    } else if (mode === 'listening'){
+      synthPhase += 0.20;
+      const v = 0.08 + 0.06*Math.sin(synthPhase) + 0.03*Math.sin(synthPhase*1.7);
+      face.setLevel(Math.max(0.02, Math.min(1, v)));
+    }
+  }
+  requestAnimationFrame(synthLoop);
+}
+requestAnimationFrame(synthLoop);
+
 // puente RN -> WebView
 function handle(raw){
   let msg; try{ msg = typeof raw==='string' ? JSON.parse(raw) : raw; }catch(e){ return; }
@@ -32,7 +55,7 @@ function handle(raw){
   switch(msg.cmd){
     case 'setMode':    face.setMode(msg.value); break;
     case 'setEmotion': face.setEmotion(msg.value); break;
-    case 'setLevel':   face.setLevel(msg.value); break;
+    case 'setLevel':   lastRealLevel = performance.now(); face.setLevel(msg.value); break;
     case 'think':      face.think(!!msg.value); break;
     case 'speak':      face.speak(); break;
     case 'listen':     face.listen(); break;

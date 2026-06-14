@@ -16,6 +16,7 @@ import { theme } from '../theme';
 import { Settings, getSessionId, resetSession } from '../settings';
 import { AudioQueue } from '../audioQueue';
 import { streamChat, streamVoice, ChatEvent, VoiceEvent, StreamHandle } from '../api';
+import NovaFaceView, { NovaFaceHandle } from '../components/NovaFaceView';
 
 type Msg = {
   id: string;
@@ -44,11 +45,16 @@ export default function ChatScreen({
   const audioRef = useRef<AudioQueue | null>(null);
   const streamRef = useRef<StreamHandle | null>(null);
   const listRef = useRef<FlatList<Msg>>(null);
+  const faceRef = useRef<NovaFaceHandle>(null);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+
+  const faceBaseUrl = `${settings.backendUrl}/static/face`;
 
   useEffect(() => {
     const q = new AudioQueue();
     audioRef.current = q;
+    // Drive the avatar's speaking state from real playback (no-op if face off).
+    q.onActive = (active) => (active ? faceRef.current?.speak() : faceRef.current?.idle());
     q.init().catch(() => {});
     getSessionId().then((id) => (sessionRef.current = id));
     return () => {
@@ -82,6 +88,7 @@ export default function ChatScreen({
     appendMsg({ id: novaId, role: 'nova', text: '', pending: true });
     setBusy(true);
     setStatus('NOVA está pensando…');
+    faceRef.current?.think(true);
 
     let acc = '';
     streamRef.current = streamChat(
@@ -106,11 +113,14 @@ export default function ChatScreen({
           updateMsg(novaId, { text: `⚠️ ${err.message}`, pending: false });
           setBusy(false);
           setStatus('');
+          faceRef.current?.idle();
         },
         onDone: () => {
           setBusy(false);
           setStatus('');
           scrollToEnd();
+          // No TTS on the text path → return to idle (speak() takes over if audio plays).
+          faceRef.current?.idle();
         },
       },
     );
@@ -130,6 +140,7 @@ export default function ChatScreen({
       recorder.record();
       setRecording(true);
       setStatus('Escuchando…');
+      faceRef.current?.listen();
     } catch (e: any) {
       setStatus(`No se pudo grabar: ${e?.message ?? e}`);
     }
@@ -140,6 +151,7 @@ export default function ChatScreen({
     setRecording(false);
     setBusy(true);
     setStatus('Transcribiendo…');
+    faceRef.current?.think(true);
     try {
       await recorder.stop();
     } catch {}
@@ -181,10 +193,14 @@ export default function ChatScreen({
           updateMsg(novaId, { text: `⚠️ ${err.message}`, pending: false });
           setBusy(false);
           setStatus('');
+          faceRef.current?.idle();
         },
         onDone: () => {
           setBusy(false);
           setStatus('');
+          // If TTS is playing, AudioQueue.onActive returns the face to idle when
+          // it finishes; otherwise drop the thinking state now.
+          if (!audioRef.current?.isPlaying()) faceRef.current?.idle();
         },
       },
     );
@@ -196,6 +212,7 @@ export default function ChatScreen({
     setMessages([]);
     setBusy(false);
     setStatus('');
+    faceRef.current?.idle();
     sessionRef.current = await resetSession();
   }, []);
 
@@ -234,6 +251,17 @@ export default function ChatScreen({
           </Pressable>
         </View>
       </View>
+
+      {settings.faceEnabled && (
+        <View style={styles.facePanel}>
+          <NovaFaceView
+            ref={faceRef}
+            baseUrl={faceBaseUrl}
+            emotion="neutral"
+            style={styles.faceWeb}
+          />
+        </View>
+      )}
 
       <FlatList
         ref={listRef}
@@ -310,6 +338,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   iconTxt: { color: theme.text, fontSize: 18 },
+  facePanel: {
+    height: 240,
+    backgroundColor: theme.bg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.border,
+  },
+  faceWeb: { flex: 1, backgroundColor: 'transparent' },
   listContent: { padding: 16, flexGrow: 1 },
   row: { marginVertical: 4, flexDirection: 'row' },
   rowUser: { justifyContent: 'flex-end' },

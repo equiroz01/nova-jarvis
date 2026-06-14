@@ -17,7 +17,11 @@ type StreamOpts = {
   onDone: () => void;
 };
 
-function authHeaders(s: Settings): Record<string, string> {
+// Only the connection fields are needed for HTTP — accept a subset so callers
+// (e.g. the Settings screen's "test connection") don't need a full Settings.
+type Conn = Pick<Settings, 'backendUrl' | 'apiKey'>;
+
+function authHeaders(s: Conn): Record<string, string> {
   return s.apiKey ? { Authorization: `Bearer ${s.apiKey}` } : {};
 }
 
@@ -161,7 +165,7 @@ export function streamVoice(
   });
 }
 
-export async function checkHealth(settings: Settings): Promise<{ ok: boolean; detail: string }> {
+export async function checkHealth(settings: Conn): Promise<{ ok: boolean; detail: string }> {
   try {
     const res = await fetch(`${settings.backendUrl}/health`, { headers: authHeaders(settings) });
     const body = await res.json().catch(() => ({}));

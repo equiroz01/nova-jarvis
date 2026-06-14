@@ -4,6 +4,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -24,6 +25,7 @@ export default function SettingsScreen({
 }) {
   const [url, setUrl] = useState(initial.backendUrl);
   const [apiKey, setApiKey] = useState(initial.apiKey);
+  const [faceEnabled, setFaceEnabled] = useState(initial.faceEnabled);
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; detail: string } | null>(null);
 
@@ -36,7 +38,7 @@ export default function SettingsScreen({
   };
 
   const save = async () => {
-    const saved = await saveSettings({ backendUrl: url, apiKey });
+    const saved = await saveSettings({ backendUrl: url, apiKey, faceEnabled });
     onSaved(saved);
     onClose();
   };
@@ -76,6 +78,22 @@ export default function SettingsScreen({
           autoCorrect={false}
           secureTextEntry
         />
+
+        <View style={styles.switchRow}>
+          <View style={styles.switchText}>
+            <Text style={styles.label}>NOVA Face</Text>
+            <Text style={styles.hint}>
+              Muestra el avatar animado en lugar del encabezado. Reacciona al hablar,
+              escuchar y pensar.
+            </Text>
+          </View>
+          <Switch
+            value={faceEnabled}
+            onValueChange={setFaceEnabled}
+            trackColor={{ false: theme.border, true: theme.accentDim }}
+            thumbColor={faceEnabled ? theme.accent : theme.textDim}
+          />
+        </View>
 
         <Pressable style={styles.testBtn} onPress={test} disabled={testing}>
           {testing ? (
@@ -144,6 +162,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.border,
   },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 24,
+    gap: 12,
+  },
+  switchText: { flex: 1 },
   testBtn: {
     marginTop: 24,
     backgroundColor: theme.surfaceAlt,

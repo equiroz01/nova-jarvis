@@ -11,6 +11,10 @@ export class AudioQueue {
   private counter = 0;
   private disposed = false;
 
+  // Fired with `true` when playback starts and `false` when the queue drains
+  // or is stopped. Used to drive the NOVA Face speaking state.
+  onActive?: (active: boolean) => void;
+
   async init() {
     // Play through the earpiece/speaker even when the silent switch is on (iOS).
     await setAudioModeAsync({ playsInSilentMode: true });
@@ -24,6 +28,7 @@ export class AudioQueue {
 
   private async drain() {
     this.playing = true;
+    this.onActive?.(true);
     while (this.queue.length && !this.disposed) {
       const b64 = this.queue.shift()!;
       try {
@@ -33,6 +38,7 @@ export class AudioQueue {
       }
     }
     this.playing = false;
+    this.onActive?.(false);
   }
 
   private playOne(b64: string): Promise<void> {
@@ -63,6 +69,10 @@ export class AudioQueue {
     });
   }
 
+  isPlaying(): boolean {
+    return this.playing;
+  }
+
   // Stop everything immediately (barge-in / new turn).
   stop() {
     this.queue = [];
@@ -70,7 +80,9 @@ export class AudioQueue {
       try { this.current.remove(); } catch {}
       this.current = null;
     }
+    const wasPlaying = this.playing;
     this.playing = false;
+    if (wasPlaying) this.onActive?.(false);
   }
 
   dispose() {
