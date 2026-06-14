@@ -79,6 +79,17 @@ function setHfState(state) {
     if (wf) wf.classList.remove('active');
     if (status) status.textContent = 'PRESS TO ACTIVATE';
   }
+
+  // Drive the NOVA Face avatar (no-op when the reactor visualizer is selected).
+  // 'speaking' is driven by the audio bus events, so it's not mapped here.
+  if (state === 'listening' || state === 'speech') {
+    bus.emit('nova:listening', { on: true });
+  } else if (state === 'processing') {
+    bus.emit('nova:thinking', { on: true });
+  } else if (state === 'idle') {
+    bus.emit('nova:listening', { on: false });
+    bus.emit('nova:thinking', { on: false });
+  }
 }
 
 function initHfWaveform() {
@@ -506,6 +517,7 @@ function toggleHandsfree() {
     document.getElementById('hfHud').classList.add('active');
     document.getElementById('hfHudTranscript').textContent = '';
     document.getElementById('hfHudResponse').textContent = '';
+    bus.emit('hf:open');   // face.js relocates the avatar into the HUD (if on)
     // BUG FIX: require user click (gesture) to start mic — this IS the gesture
     startHandsfree();
   }
@@ -514,6 +526,7 @@ function toggleHandsfree() {
 function closeHfHud() {
   stopHandsfree();
   document.getElementById('hfHud').classList.remove('active');
+  bus.emit('hf:close');  // face.js returns the avatar to the hero panel (if on)
   setInputMode('text');
 }
 

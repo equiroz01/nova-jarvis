@@ -590,3 +590,30 @@ svg.reactor-svg .ring-sweep{transform-origin:120px 120px}
 .theme-toggle svg{width:14px;height:14px;stroke:var(--text-secondary);transition:stroke 0.3s}
 .theme-toggle:hover{border-color:var(--cyan);background:var(--cyan-dim)}
 .theme-toggle:hover svg{stroke:var(--cyan)}
+
+/* ── NOVA Face visualizer ─────────────────────────────────────────────
+   Toggled via <body data-visual="face">. Default ("reactor") = classic
+   arc-reactor everywhere; "face" swaps the avatar in hero/speaking/HUD. */
+#novaFace,#hfFaceSlot{display:none}
+
+/* Active face icon when the Face visualizer is selected */
+body[data-visual="face"] #faceToggle{border-color:var(--cyan);background:var(--cyan-dim)}
+body[data-visual="face"] #faceToggle svg{stroke:var(--cyan)}
+
+/* Hero panel: its own grid row between topbar and chat */
+body[data-visual="face"] .app{grid-template-rows:auto auto 1fr auto}
+body[data-visual="face"] #novaFace{
+  display:block;position:relative;
+  height:min(40vh,360px);width:100%;overflow:hidden;
+}
+
+/* In Face mode the face IS the avatar — retire the redundant reactors */
+body[data-visual="face"] #welcome .arc-reactor{display:none}
+body[data-visual="face"] .speaking-overlay{display:none!important}
+body[data-visual="face"] #hfReactor{display:none}
+
+/* Hands-free fullscreen HUD hosts the relocated face canvas */
+body[data-visual="face"] #hfFaceSlot{
+  display:block;position:relative;
+  width:min(60vmin,360px);height:min(60vmin,360px);
+}

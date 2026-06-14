@@ -1,0 +1,25 @@
+{
+  "name": "@nova/face",
+  "version": "1.0.0",
+  "description": "Rostro animado de NOVA — módulo reutilizable (web + React Native vía WebView).",
+  "type": "module",
+  "main": "src/nova-face.js",
+  "module": "src/nova-face.js",
+  "exports": {
+    ".": "./src/nova-face.js",
+    "./web/bind": "./web/nova-face-bind.js",
+    "./mobile/NovaFaceView": "./mobile/NovaFaceView.tsx",
+    "./assets/*": "./assets/*"
+  },
+  "files": ["src", "web", "mobile", "assets", "README.md"],
+  "sideEffects": ["./src/nova-face.js"],
+  "peerDependencies": {
+    "react-native-webview": "*"
+  },
+  "peerDependenciesMeta": {
+    "react-native-webview": { "optional": true }
+  },
+  "keywords": ["nova", "avatar", "face", "canvas", "lip-sync", "hud"],
+  "license": "UNLICENSED",
+  "private": true
+}

@@ -37,3 +37,8 @@ node_modules/
 # node_modules/ JSON stays excluded (can't re-include under an excluded dir).
 !mobile/*.json
 !mobile/**/*.json
+
+# Same `*.json` gotcha for the shared packages (e.g. nova-face/package.json):
+# re-include so the package manifest is tracked and shipped.
+!packages/*.json
+!packages/**/*.json

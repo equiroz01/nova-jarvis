@@ -5,6 +5,7 @@ import { playAudio, playAudioAsync, stopAudio } from './audio.js';
 import { speakFiller } from './fillers.js';
 import { stopRecording, getIsRecording } from './voice.js';
 import { stopHandsfree } from './handsfree.js';
+import bus from './eventbus.js';
 
 let API;
 let sessionId;
@@ -47,6 +48,7 @@ async function sendText() {
 
   // Fire filler + LLM in parallel
   const streamBubble = addStreamMessage();
+  bus.emit('nova:thinking', { on: true });
 
   // Fire filler (async, updates bubble when ready)
   speakFiller(msg).then(text => {
@@ -91,6 +93,7 @@ async function sendText() {
           if (data.type === 'done') {
             fullResponse = data.response;
             updateStreamMessage(streamBubble, fullResponse);
+            bus.emit('nova:thinking', { on: false });
 
             // Stop filler, play response sentence by sentence
             stopAudio('filler');
@@ -105,6 +108,7 @@ async function sendText() {
     }
   } catch (e) {
     hideTyping();
+    bus.emit('nova:thinking', { on: false });
     addMessage('Connection error. Backend may be offline.', 'jarvis');
   }
 }

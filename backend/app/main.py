@@ -171,6 +171,18 @@ app.include_router(tasks_router)
 
 # Serve frontend
 STATIC_DIR = Path(__file__).parent / "static"
+
+# NOVA Face package (shared visual core used by web + mobile WebView).
+# Mounted at /static/face BEFORE the main /static mount so this more specific
+# path wins. Guarded: if the package isn't shipped, NOVA still boots normally
+# and the web UI falls back to the classic arc-reactor visualizer.
+FACE_DIR = Path(__file__).parents[2] / "packages" / "nova-face"
+if FACE_DIR.is_dir():
+    app.mount("/static/face", StaticFiles(directory=FACE_DIR), name="face")
+    logger.info("NOVA Face package mounted at /static/face")
+else:
+    logger.warning("NOVA Face package not found at %s — face visualizer disabled", FACE_DIR)
+
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 

@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<meta name="theme-color" content="#04060a" />
+<title>NOVA Face · módulo (demo consumidor)</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#04060a;color:#cfe9f7;
+    font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+  .wrap{display:flex;flex-direction:column;height:100%}
+  /* el módulo se monta aquí; ocupa todo el espacio disponible */
+  #novaFace{flex:1;min-height:0}
+  .panel{background:linear-gradient(180deg,rgba(14,20,29,.92),rgba(8,12,18,.97));
+    border-top:1px solid #1b2735;padding:14px clamp(12px,3vw,28px) calc(16px + env(safe-area-inset-bottom,0px))}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;max-width:980px;margin:0 auto}
+  .row+.row{margin-top:10px}
+  input[type=text]{flex:1;min-width:200px;background:#0a121b;border:1px solid #1b2735;color:#cfe9f7;
+    border-radius:10px;padding:12px 14px;font-size:16px;outline:none}
+  button{appearance:none;border:1px solid #1b2735;background:#13202c;color:#cfe9f7;border-radius:10px;
+    padding:11px 15px;font-size:13px;cursor:pointer;min-height:44px;display:inline-flex;align-items:center;gap:7px}
+  button.primary{background:linear-gradient(180deg,#1f9ed6,#1280b6);border-color:#2ea6db;color:#03161f;font-weight:600}
+  button.on{border-color:#36d6ff;box-shadow:0 0 0 1px #36d6ff inset,0 0 18px -6px #36d6ff}
+  .chips{display:flex;gap:7px;flex-wrap:wrap;overflow-x:auto}
+  .chip{padding:9px 13px;font-size:12px;border-radius:20px;background:#0f1a24;border:1px solid #1b2735;
+    white-space:nowrap;min-height:38px;cursor:pointer}
+  .chip.on{border-color:#36d6ff;color:#eaffff;background:#122a38}
+  .dot{width:7px;height:7px;border-radius:50%;background:#33526a;display:inline-block}
+  .dot.live{background:#36d6ff;box-shadow:0 0 10px #36d6ff}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="novaFace"></div>
+  <div class="panel">
+    <div class="row">
+      <input id="text" type="text" value="Hola, soy NOVA. Este rostro ahora es un módulo reutilizable." />
+      <button class="primary" id="speakBtn">▶ Hablar</button>
+      <button id="sampleBtn">◗ Muestra</button>
+      <button id="micBtn"><span class="dot" id="micDot"></span> Micrófono</button>
+      <button id="thinkBtn">⋯ Pensar</button>
+    </div>
+    <div class="row">
+      <span style="color:#6f8597;font-size:12px">Emoción</span>
+      <div class="chips" id="emoChips"></div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { NovaFace, EMOTIONS } from '../src/nova-face.js';
+
+// === así consume cualquier parte de la app el módulo ===
+const face = new NovaFace({ container:'#novaFace', assetBase:'../assets/' });
+
+// chips de emoción
+const chipsEl = document.getElementById('emoChips');
+const LABEL = {neutral:'Neutral',happy:'Feliz',love:'Amor',cool:'Cool',sad:'Triste',angry:'Enojo',surprised:'Sorpresa',sleepy:'Sueño',dizzy:'Mareo'};
+EMOTIONS.forEach(e=>{ const b=document.createElement('button'); b.className='chip'+(e==='neutral'?' on':''); b.textContent=LABEL[e]; b.dataset.e=e;
+  b.onclick=()=>{ face.setEmotion(e); [...chipsEl.children].forEach(c=>c.classList.toggle('on',c.dataset.e===e)); }; chipsEl.appendChild(b); });
+
+// Hablar: voz del navegador + empuje de nivel sintético (la app es la que "empuja")
+const speakBtn=document.getElementById('speakBtn');
+let envRAF=0;
+function envelope(on){ cancelAnimationFrame(envRAF); let ph=0; const tick=()=>{ if(!on.v){ face.setLevel(face.S.level*0.8); if(face.S.level<0.02)return; envRAF=requestAnimationFrame(tick); return;} ph+=0.45; face.setLevel(Math.max(0.05,Math.min(1,0.18+0.12*Math.sin(ph)+0.08*Math.sin(ph*2.3)))); envRAF=requestAnimationFrame(tick);}; tick(); }
+speakBtn.onclick=()=>{ const txt=document.getElementById('text').value.trim(); if(!txt)return;
+  if(!('speechSynthesis'in window))return; speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(txt); u.lang='es-ES'; u.rate=1.02; u.pitch=1.05;
+  const on={v:false};
+  u.onstart=()=>{ face.speak(); on.v=true; envelope(on); };
+  u.onend=()=>{ on.v=false; setTimeout(()=>face.idle(),180); };
+  speechSynthesis.speak(u); };
+
+// Muestra: amplitud REAL via connectAudioElement
+const sample=new Audio('../assets/nova_sample.m4a'); sample.crossOrigin='anonymous';
+document.getElementById('sampleBtn').onclick=async()=>{ face.connectAudioElement(sample); sample.currentTime=0; await sample.play(); };
+sample.onended=()=>{ face.disconnectAudio(); face.idle(); };
+
+// Micrófono: amplitud REAL via connectStream
+const micBtn=document.getElementById('micBtn'), micDot=document.getElementById('micDot'); let micOn=false, micStream=null;
+micBtn.onclick=async()=>{ if(micOn){ micOn=false; micBtn.classList.remove('on'); micDot.classList.remove('live'); face.disconnectAudio(); face.idle(); return; }
+  try{ micStream=await navigator.mediaDevices.getUserMedia({audio:true}); face.connectStream(micStream); micOn=true; micBtn.classList.add('on'); micDot.classList.add('live'); }
+  catch(e){ alert('Micrófono no disponible (sirve por http://): '+e); } };
+
+// Pensar
+const thinkBtn=document.getElementById('thinkBtn'); let thinking=false;
+thinkBtn.onclick=()=>{ thinking=!thinking; face.think(thinking); thinkBtn.classList.toggle('on',thinking); };
+</script>
+</body>
+</html>
